@@ -9,13 +9,19 @@ export default async function Home() {
   let tv = { results: [] };
   let top = { results: [] };
   let anime = { results: [] };
+  let hindi: any = { results: [] };
+  let tamil: any = { results: [] };
+  let telugu: any = { results: [] };
   try {
-    [data, movies, tv, top, anime] = await Promise.all([
+    [data, movies, tv, top, anime, hindi, tamil, telugu] = await Promise.all([
       tmdb.trending('all'),
       tmdb.popularMovies(),
       tmdb.popularTV(),
       tmdb.topRatedMovies(),
       tmdb.anime(),
+      tmdb.bollywood(),
+      tmdb.southTamil(),
+      tmdb.southTelugu(),
     ]);
   } catch (e: any) {
     return (
@@ -41,6 +47,14 @@ export default async function Home() {
       <Row title="Popular movies" items={movies.results ?? []} type="movie" />
       <Row title="Popular TV shows" items={tv.results ?? []} type="tv" />
       <Row title="Top rated movies" items={top.results ?? []} type="movie" />
+      <Row title="Hindi / Bollywood" items={hindi.results ?? []} type="movie" />
+      <Row
+        title="South Indian (Tamil + Telugu)"
+        items={[...(tamil.results ?? []), ...(telugu.results ?? [])]
+          .filter((m, i, a) => a.findIndex((x) => x.id === m.id) === i)
+          .slice(0, 20)}
+        type="movie"
+      />
       <Row title="Anime" items={anime.results ?? []} type="tv" />
     </div>
   );

@@ -27,6 +27,19 @@ Open http://localhost:3000
 ## Servers
 Edit `lib/servers.ts` to add/remove embed providers. Player auto-switches + reloads.
 
+### Hindi dubbed / South movies
+- Homepage has **Hindi / Bollywood** and **South Indian (Tamil + Telugu)** rows
+  (TMDB `discover` with `with_original_language=hi/ta/te`, region IN).
+- New **VixSrc** server (`vixsrc.to`) parses multi-audio HLS tracks, so a Hindi
+  audio option appears when that copy includes it.
+- Honest limit: no TMDB-keyed iframe API guarantees Hindi dubbing. Hollywood-centric
+  providers carry Hindi audio only sporadically per title. Dedicated Hindi/South
+  libraries (HydraHD, MultiMovies, Movi.pk, Einthusan per FMHY) are full sites, not
+  embeddable players — link out to them rather than iframing.
+- **NetMirror** (Hindi-focused) has no simple iframe player — only a scraper API
+  returning direct stream JSON, which needs a backend resolver + custom player.
+  Out of scope for this iframe template.
+
 ### Server notes (measured Oct 2026, Pakistan network)
 - **SuperEmbed redirect is normal.** The iframe URL is `multiembed.mov/?video_id=…&tmdb=1`
   (per `superembed.stream/#install`); it then redirects to a `streamingnow.mov/?play=…`

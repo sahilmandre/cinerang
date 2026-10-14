@@ -56,6 +56,15 @@ export const SERVERS: VideoServer[] = [
     tvUrl: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
   },
   {
+    // Parses multi-audio HLS tracks — Hindi audio shows up here when the
+    // copy has it. Reachable from PK (HTTP 403 challenge to bots, like
+    // SuperEmbed) but vidsrc.to times out entirely.
+    id: 'vixsrc',
+    name: 'VixSrc',
+    movieUrl: (id) => `https://vixsrc.to/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vixsrc.to/tv/${id}/${s}/${e}`,
+  },
+  {
     // Canonical format per docs is vidsrc.to/embed/...
     // vidsrc.xyz is dead. Often ISP/DNS-blocked in PK — use VPN if blank.
     id: 'vidsrc',

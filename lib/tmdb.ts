@@ -35,6 +35,12 @@ export const tmdb = {
   popularTV: () => tmdbFetch(`/tv/popular`),
   topRatedMovies: () => tmdbFetch(`/movie/top_rated`),
   anime: () => tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc`),
+  bollywood: () =>
+    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc`),
+  southTamil: () =>
+    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc`),
+  southTelugu: () =>
+    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc`),
   search: (q: string) => tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false`),
   movieDetails: (id: string) => tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar`),
   tvDetails: (id: string) => tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar`),
