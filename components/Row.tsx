@@ -1,6 +1,18 @@
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import MovieCard, { TMDBItem } from './MovieCard';
 
-export default function Row({ title, items, type }: { title: string; items: TMDBItem[]; type?: 'movie' | 'tv' }) {
+export default function Row({
+  title,
+  items,
+  type,
+  href,
+}: {
+  title: string;
+  items: TMDBItem[];
+  type?: 'movie' | 'tv';
+  href?: string;
+}) {
   if (!items?.length) return null;
   return (
     <section className="mt-9">
@@ -10,6 +22,14 @@ export default function Row({ title, items, type }: { title: string; items: TMDB
         <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/40">
           {items.length}
         </span>
+        {href && (
+          <Link
+            href={href}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-accent"
+          >
+            View all <ArrowRight size={12} />
+          </Link>
+        )}
       </div>
       <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
         {items.map((m) => (

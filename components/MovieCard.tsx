@@ -18,13 +18,23 @@ export function mediaTypeOf(item: TMDBItem, fallback: 'movie' | 'tv' = 'movie') 
   return fallback;
 }
 
-export default function MovieCard({ item, forceType }: { item: TMDBItem; forceType?: 'movie' | 'tv' }) {
+export default function MovieCard({
+  item,
+  forceType,
+  fluid = false,
+}: {
+  item: TMDBItem;
+  forceType?: 'movie' | 'tv';
+  fluid?: boolean;
+}) {
   const type = forceType ?? mediaTypeOf(item);
   const title = item.title ?? item.name ?? 'Unknown';
   return (
     <Link
       href={`/watch/${type}/${item.id}`}
-      className="group w-[136px] shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-card transition duration-300 hover:-translate-y-1 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 md:w-[160px]"
+      className={`group overflow-hidden rounded-xl border border-white/[0.07] bg-card transition duration-300 hover:-translate-y-1 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 ${
+        fluid ? 'w-full' : 'w-[136px] shrink-0 md:w-[160px]'
+      }`}
     >
       <div className="relative overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}

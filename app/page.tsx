@@ -43,19 +43,20 @@ export default async function Home() {
     <div>
       <Hero items={data.results ?? []} />
       <ContinueWatching />
-      <Row title="Trending now" items={data.results ?? []} />
-      <Row title="Popular movies" items={movies.results ?? []} type="movie" />
-      <Row title="Popular TV shows" items={tv.results ?? []} type="tv" />
-      <Row title="Top rated movies" items={top.results ?? []} type="movie" />
-      <Row title="Hindi / Bollywood" items={hindi.results ?? []} type="movie" />
+      <Row title="Trending now" items={data.results ?? []} href="/browse/trending" />
+      <Row title="Popular movies" items={movies.results ?? []} type="movie" href="/browse/popular-movies" />
+      <Row title="Popular TV shows" items={tv.results ?? []} type="tv" href="/browse/popular-tv" />
+      <Row title="Top rated movies" items={top.results ?? []} type="movie" href="/browse/top-rated" />
+      <Row title="Hindi / Bollywood" items={hindi.results ?? []} type="movie" href="/browse/hindi" />
       <Row
         title="South Indian (Tamil + Telugu)"
         items={[...(tamil.results ?? []), ...(telugu.results ?? [])]
           .filter((m, i, a) => a.findIndex((x) => x.id === m.id) === i)
           .slice(0, 20)}
         type="movie"
+        href="/browse/south"
       />
-      <Row title="Anime" items={anime.results ?? []} type="tv" />
+      <Row title="Anime" items={anime.results ?? []} type="tv" href="/browse/anime" />
     </div>
   );
 }

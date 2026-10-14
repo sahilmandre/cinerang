@@ -30,18 +30,21 @@ async function tmdbFetch(path: string) {
 }
 
 export const tmdb = {
-  trending: (type: 'movie' | 'tv' | 'all' = 'all') => tmdbFetch(`/trending/${type}/week`),
-  popularMovies: () => tmdbFetch(`/movie/popular`),
-  popularTV: () => tmdbFetch(`/tv/popular`),
-  topRatedMovies: () => tmdbFetch(`/movie/top_rated`),
-  anime: () => tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc`),
-  bollywood: () =>
-    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc`),
-  southTamil: () =>
-    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc`),
-  southTelugu: () =>
-    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc`),
-  search: (q: string) => tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false`),
+  trending: (type: 'movie' | 'tv' | 'all' = 'all', page = 1) =>
+    tmdbFetch(`/trending/${type}/week?page=${page}`),
+  popularMovies: (page = 1) => tmdbFetch(`/movie/popular?page=${page}`),
+  popularTV: (page = 1) => tmdbFetch(`/tv/popular?page=${page}`),
+  topRatedMovies: (page = 1) => tmdbFetch(`/movie/top_rated?page=${page}`),
+  anime: (page = 1) =>
+    tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}`),
+  bollywood: (page = 1) =>
+    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc&page=${page}`),
+  southTamil: (page = 1) =>
+    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc&page=${page}`),
+  southTelugu: (page = 1) =>
+    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&page=${page}`),
+  search: (q: string, page = 1) =>
+    tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false&page=${page}`),
   movieDetails: (id: string) => tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar`),
   tvDetails: (id: string) => tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar`),
   seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`),
