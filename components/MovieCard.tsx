@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Star } from 'lucide-react';
+import { Play, Star } from 'lucide-react';
 import { poster } from '@/lib/tmdb';
 
 export interface TMDBItem {
@@ -50,6 +50,12 @@ export default function MovieCard({
             {item.vote_average.toFixed(1)}
           </span>
         ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
+        <span className="absolute inset-0 grid place-items-center opacity-0 transition duration-300 group-hover:opacity-100">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-accent text-black shadow-xl shadow-accent/40">
+            <Play size={16} className="ml-0.5 fill-black" />
+          </span>
+        </span>
       </div>
       <div className="p-2">
         <p className="truncate text-[13px] font-semibold">{title}</p>
