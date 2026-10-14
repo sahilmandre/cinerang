@@ -32,6 +32,14 @@ Edit `lib/servers.ts` to add/remove embed providers. Player auto-switches + relo
   (TMDB `discover` with `with_original_language=hi/ta/te`, region IN).
 - New **VixSrc** server (`vixsrc.to`) parses multi-audio HLS tracks, so a Hindi
   audio option appears when that copy includes it.
+- New **YapGrid** server (verified HTTP 200, ad-free, 50+ UI languages, in-player
+  subtitle translation) — best for Hindi-speaking viewers via Hindi subtitles.
+- About the VixSrc **"REQUEST FAILED WITH STATUS CODE 404"**: that styled error is
+  rendered by VixSrc's own player, which means our embed URL is correct and the page
+  loaded — VixSrc simply has **no copy of that particular title**. Test VixSrc on a
+  Hollywood title (e.g. `/watch/movie/550`) to confirm; per-title gaps are normal.
+- Rejected candidates: **SmashyStream** (`embed.smashystream.com` times out from PK),
+  **VidCore** (unreachable), **NetMirror** (no iframe player, scraper API only).
 - Honest limit: no TMDB-keyed iframe API guarantees Hindi dubbing. Hollywood-centric
   providers carry Hindi audio only sporadically per title. Dedicated Hindi/South
   libraries (HydraHD, MultiMovies, Movi.pk, Einthusan per FMHY) are full sites, not

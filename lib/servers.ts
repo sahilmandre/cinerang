@@ -56,6 +56,16 @@ export const SERVERS: VideoServer[] = [
     tvUrl: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
   },
   {
+    // Verified Oct 2026: HTTP 200 from PK, no bot challenge, documented at
+    // github.com/enikqi/yapgrid. Ad-free, 50+ UI languages, in-player
+    // subtitle translation — best pick for Hindi-speaking viewers
+    // (Hindi subtitles/UI, not dubbed audio).
+    id: 'yapgrid',
+    name: 'YapGrid',
+    movieUrl: (id) => `https://yapgrid.com/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://yapgrid.com/embed/tv/${id}/${s}/${e}`,
+  },
+  {
     // Parses multi-audio HLS tracks — Hindi audio shows up here when the
     // copy has it. Reachable from PK (HTTP 403 challenge to bots, like
     // SuperEmbed) but vidsrc.to times out entirely.
