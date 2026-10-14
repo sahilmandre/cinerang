@@ -38,7 +38,10 @@ Edit `lib/servers.ts` to add/remove embed providers. Player auto-switches + relo
   rendered by VixSrc's own player, which means our embed URL is correct and the page
   loaded — VixSrc simply has **no copy of that particular title**. Test VixSrc on a
   Hollywood title (e.g. `/watch/movie/550`) to confirm; per-title gaps are normal.
-- Rejected candidates: **SmashyStream** (`embed.smashystream.com` times out from PK),
+- New **Screenscape** server (`nxsha.screenscape.me/embed`, docs at
+  `screenscape.me/embed`) — multi-server failover + `lan=hindi` prefers Hindi audio
+  (their default when available). Verified HTTP 200 for movie + TV from PK.
+- Rejected candidates: **SmashyStream** (`embed.smashystream.com` → HTTP 451/blocked),
   **VidCore** (unreachable), **NetMirror** (no iframe player, scraper API only).
 - Honest limit: no TMDB-keyed iframe API guarantees Hindi dubbing. Hollywood-centric
   providers carry Hindi audio only sporadically per title. Dedicated Hindi/South

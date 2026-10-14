@@ -56,6 +56,15 @@ export const SERVERS: VideoServer[] = [
     tvUrl: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
   },
   {
+    // Docs: screenscape.me/embed — multi-server failover, multi-language
+    // audio. lan=hindi prefers Hindi audio (also their default when available).
+    // Verified Oct 2026: HTTP 200 for movie + TV embeds from PK+VPN.
+    id: 'screenscape',
+    name: 'Screenscape',
+    movieUrl: (id) => `https://nxsha.screenscape.me/embed?tmdb=${id}&type=movie&lan=hindi`,
+    tvUrl: (id, s, e) => `https://nxsha.screenscape.me/embed?tmdb=${id}&type=tv&s=${s}&e=${e}&lan=hindi`,
+  },
+  {
     // Verified Oct 2026: HTTP 200 from PK, no bot challenge, documented at
     // github.com/enikqi/yapgrid. Ad-free, 50+ UI languages, in-player
     // subtitle translation — best pick for Hindi-speaking viewers
