@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SERVERS, getEmbedUrl, MediaType } from '@/lib/servers';
 import { saveContinue } from '@/lib/storage';
 
@@ -22,8 +22,46 @@ export default function Player({
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
   const [key, setKey] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+  // Servers already tried for this title/episode. Auto-failover walks this
+  // list so one dead embed doesn't trap the viewer; stops after all tried.
+  const triedRef = useRef<string[]>(['2embed']);
+
+  const episodeKey = `${tmdbId}-${season}-${episode}`;
+  useEffect(() => {
+    triedRef.current = [server];
+    setExhausted(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodeKey]);
 
   const url = getEmbedUrl(server, type, tmdbId, season, episode);
+
+  const loadServer = (id: string, resetTried = false) => {
+    if (resetTried) triedRef.current = [id];
+    else if (!triedRef.current.includes(id)) triedRef.current.push(id);
+    setServer(id);
+    setKey((k) => k + 1);
+    setExhausted(false);
+  };
+
+  // Auto-switch: fires when the iframe itself fails to load (dead domain,
+  // DNS block, connection reset). Note: errors rendered *inside* a loaded
+  // player (e.g. "no copy for this title") are cross-origin and invisible
+  // to us — use "Try next server" for those.
+  const autoAdvance = () => {
+    const remaining = SERVERS.map((s) => s.id).filter((id) => !triedRef.current.includes(id));
+    if (!remaining.length) {
+      setExhausted(true);
+      return;
+    }
+    const next = remaining[0];
+    triedRef.current.push(next);
+    setServer(next);
+    setKey((k) => k + 1);
+  };
+
+  const nextUntried = SERVERS.map((s) => s.id).find((id) => !triedRef.current.includes(id));
+  const nextName = SERVERS.find((s) => s.id === nextUntried)?.name;
 
   const persist = (s = season, e = episode) =>
     saveContinue({
@@ -43,8 +81,7 @@ export default function Player({
           <button
             key={s.id}
             onClick={() => {
-              setServer(s.id);
-              setKey((k) => k + 1);
+              loadServer(s.id, true);
               persist();
             }}
             className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition ${
@@ -121,6 +158,7 @@ export default function Player({
         <iframe
           key={`${server}-${season}-${episode}-${key}`}
           src={url}
+          onError={autoAdvance}
           className="aspect-video w-full"
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           allowFullScreen
@@ -128,10 +166,40 @@ export default function Player({
           title={`${title} player`}
         />
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-white/35">
-        If one server fails, switch servers above. Blank + working “Open in new tab”
-        usually means an embed block, not a dead source. uBlock Origin recommended.
-      </p>
+      {exhausted ? (
+        <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-200">
+          Tried every server and none loaded. The title may be region-blocked or missing
+          everywhere right now.{' '}
+          <button
+            onClick={() => {
+              triedRef.current = [server];
+              setExhausted(false);
+              setKey((k) => k + 1);
+            }}
+            className="font-bold underline hover:text-amber-100"
+          >
+            Retry all servers
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p className="flex-1 text-xs leading-relaxed text-white/35">
+            Auto-switches when a server fails to load. If the player loads but shows its
+            own error, use “Try next server”.
+          </p>
+          {nextUntried && (
+            <button
+              onClick={() => {
+                autoAdvance();
+                persist();
+              }}
+              className="rounded-full bg-accent/15 px-4 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25"
+            >
+              Try {nextName} →
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

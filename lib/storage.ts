@@ -29,6 +29,17 @@ export function saveContinue(item: ContinueItem) {
   localStorage.setItem(KEY_CONTINUE, JSON.stringify(list.slice(0, 20)));
 }
 
+export function removeContinue(id: number, mediaType: string) {
+  if (typeof window === 'undefined') return;
+  const next = getContinue().filter((x) => !(x.id === id && x.mediaType === mediaType));
+  localStorage.setItem(KEY_CONTINUE, JSON.stringify(next));
+}
+
+export function clearContinue() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(KEY_CONTINUE);
+}
+
 export function getWatchlist(): ContinueItem[] {
   if (typeof window === 'undefined') return [];
   try {
