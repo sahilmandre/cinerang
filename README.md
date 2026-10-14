@@ -1,4 +1,4 @@
-# Cinejoy Clone (Next.js)
+# CineRang
 
 Streaming UI like `cinejoy.pk/watch/movie/350` — TMDB for catalog + multi-server iframe player.
 
