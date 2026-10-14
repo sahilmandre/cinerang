@@ -3,11 +3,12 @@ import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
 
 export default async function MoviesPage() {
-  const [hollywood, hindi, telugu, tamil] = await Promise.all([
+  const [hollywood, hindi, telugu, tamil, korean] = await Promise.all([
     tmdb.moviesByLang('en'),
     tmdb.bollywood(),
     tmdb.moviesByLang('te'),
     tmdb.moviesByLang('ta'),
+    tmdb.moviesByLang('ko'),
   ]);
   return (
     <div className="mt-6">
@@ -19,6 +20,7 @@ export default async function MoviesPage() {
       <Row title="Bollywood (Hindi)" items={hindi.results ?? []} type="movie" href="/browse/hindi" />
       <Row title="Tollywood (Telugu)" items={telugu.results ?? []} type="movie" href="/browse/tollywood" />
       <Row title="Tamil" items={tamil.results ?? []} type="movie" href="/browse/tamil" />
+      <Row title="Korean Movies" items={korean.results ?? []} type="movie" href="/browse/korean" />
       <ContinueWatching />
     </div>
   );

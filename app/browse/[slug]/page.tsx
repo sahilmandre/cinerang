@@ -29,6 +29,7 @@ const CATEGORIES: Record<string, Category> = {
     },
   },
   hollywood: { title: 'Hollywood (English)', type: 'movie', load: (p) => tmdb.moviesByLang('en', p) },
+  korean: { title: 'Korean Movies', type: 'movie', load: (p) => tmdb.moviesByLang('ko', p) },
   tollywood: { title: 'Tollywood (Telugu)', type: 'movie', load: (p) => tmdb.moviesByLang('te', p) },
   tamil: { title: 'Tamil', type: 'movie', load: (p) => tmdb.moviesByLang('ta', p) },
   'tv-english': { title: 'English TV Series', type: 'tv', load: (p) => tmdb.tvByLang('en', p) },
