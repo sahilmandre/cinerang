@@ -13,9 +13,20 @@ async function tmdbFetch(path: string) {
   } else {
     throw new Error('Missing NEXT_PUBLIC_TMDB_API_KEY or NEXT_PUBLIC_TMDB_ACCESS_TOKEN in .env.local');
   }
-  const res = await fetch(finalUrl, { headers, next: { revalidate: 3600 } });
-  if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
-  return res.json();
+  // Retry with backoff: TMDB resets TLS connections intermittently on some
+  // networks (ECONNRESET). TV pages make 2 calls, doubling the flake chance.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(finalUrl, { headers, next: { revalidate: 3600 } });
+      if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
+      return res.json();
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 export const tmdb = {
