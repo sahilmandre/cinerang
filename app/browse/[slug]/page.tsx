@@ -28,6 +28,12 @@ const CATEGORIES: Record<string, Category> = {
       return { results: merged, total_pages: Math.max(ta.total_pages ?? 1, te.total_pages ?? 1) };
     },
   },
+  hollywood: { title: 'Hollywood (English)', type: 'movie', load: (p) => tmdb.moviesByLang('en', p) },
+  tollywood: { title: 'Tollywood (Telugu)', type: 'movie', load: (p) => tmdb.moviesByLang('te', p) },
+  tamil: { title: 'Tamil', type: 'movie', load: (p) => tmdb.moviesByLang('ta', p) },
+  'tv-english': { title: 'English TV Series', type: 'tv', load: (p) => tmdb.tvByLang('en', p) },
+  'tv-hindi': { title: 'Hindi TV Series', type: 'tv', load: (p) => tmdb.tvByLang('hi', p) },
+  'tv-korean': { title: 'Korean TV Series', type: 'tv', load: (p) => tmdb.tvByLang('ko', p) },
 };
 
 export default async function BrowsePage({

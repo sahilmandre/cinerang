@@ -48,6 +48,10 @@ export const tmdb = {
   movieDetails: (id: string) => tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar`),
   tvDetails: (id: string) => tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar`),
   seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`),
+  moviesByLang: (lang: string, page = 1) =>
+    tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`),
+  tvByLang: (lang: string, page = 1) =>
+    tmdbFetch(`/discover/tv?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`),
 };
 
 export const poster = (path: string | null, size = 'w500') =>
