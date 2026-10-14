@@ -27,6 +27,28 @@ export default function Player({
   // starts where the copy is most likely to exist — no blind trial.
   const list = orderedServers(adult);
   const recommended = adult ? (defaultServer ?? ADULT_DEFAULT_SERVER) : null;
+  // Popup-blocker: sandboxed frame kills popups + tab-hijacks while
+  // keeping scripts/storage alive. Cross-origin players can't escape it.
+  // Defaults on; VidFast/VidLink refuse sandboxed frames and load direct.
+  const [blocker, setBlocker] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('cinerang.popup_block') === '0') setBlocker(false);
+    } catch {
+      /* stay protected */
+    }
+  }, []);
+  const toggleBlocker = () => {
+    setBlocker((b) => {
+      try {
+        localStorage.setItem('cinerang.popup_block', b ? '0' : '1');
+      } catch {
+        /* session-only */
+      }
+      return !b;
+    });
+    setKey((k) => k + 1);
+  };
   const [server, setServer] = useState(fallback);
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
@@ -35,6 +57,8 @@ export default function Player({
   // Servers already tried for this title/episode. Auto-failover walks this
   // list so one dead embed doesn't trap the viewer; stops after all tried.
   const triedRef = useRef<string[]>([fallback]);
+  const current = list.find((s) => s.id === server);
+  const sandboxed = blocker && !!current && !current.noSandbox;
 
   const episodeKey = `${tmdbId}-${season}-${episode}`;
   useEffect(() => {
@@ -112,6 +136,16 @@ export default function Player({
           >
             {s.id === recommended ? '★ ' : null}
             {s.name}
+            {s.ads === 'none' ? (
+              <span className="ml-1.5 rounded bg-emerald-500/20 px-1 py-px text-[10px] font-extrabold text-emerald-300">
+                Ad-free
+              </span>
+            ) : null}
+            {s.ads === 'minimal' ? (
+              <span className="ml-1.5 rounded bg-white/10 px-1 py-px text-[10px] font-bold text-white/60">
+                Few ads
+              </span>
+            ) : null}
             {adult && s.adultOk ? (
               <span className="ml-1.5 rounded bg-red-500/25 px-1 py-px text-[10px] font-extrabold text-red-200">
                 18+
@@ -129,12 +163,30 @@ export default function Player({
           ↗ Open
         </a>
         <button
+          onClick={toggleBlocker}
+          title="Sandboxed frame blocks popups and tab-hijacks. Turn off if a player refuses to load inside it."
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
+            blocker
+              ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+              : 'border-white/10 text-white/70 hover:border-accent/40 hover:text-white'
+          }`}
+        >
+          <span className={`h-2 w-2 rounded-full ${blocker ? 'bg-emerald-400' : 'bg-white/25'}`} />
+          Blocker {blocker ? 'on' : 'off'}
+        </button>
+        <button
           onClick={() => setKey((k) => k + 1)}
           className="ml-auto rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
         >
           ↻ Reload
         </button>
       </div>
+      {blocker && current?.noSandbox ? (
+        <p className="mt-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2 text-xs leading-relaxed text-amber-200/90">
+          {current.name} plays direct — it refuses sandboxed frames, so the
+          popup-blocker can&apos;t apply here. Switch server for full blocking.
+        </p>
+      ) : null}
 
       {type === 'tv' && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 px-3 py-2.5 text-sm backdrop-blur">
@@ -182,13 +234,14 @@ export default function Player({
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/60 ring-1 ring-white/5">
         <iframe
-          key={`${server}-${season}-${episode}-${key}`}
+          key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
           src={url}
           onError={autoAdvance}
           className="aspect-video w-full"
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           allowFullScreen
           referrerPolicy="origin"
+          sandbox={sandboxed ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
           title={`${title} player`}
         />
       </div>
