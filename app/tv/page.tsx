@@ -1,14 +1,31 @@
 import { tmdb } from '@/lib/tmdb';
 import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
+import LoadError from '@/components/LoadError';
 
 export default async function TVPage() {
-  const [english, hindi, korean, anime] = await Promise.all([
-    tmdb.tvByLang('en'),
-    tmdb.tvByLang('hi'),
-    tmdb.tvByLang('ko'),
-    tmdb.anime(),
-  ]);
+  let english: any,
+    hindi: any,
+    korean: any,
+    anime: any,
+    action: any,
+    crime: any,
+    mystery: any,
+    scifi: any;
+  try {
+    [english, hindi, korean, anime, action, crime, mystery, scifi] = await Promise.all([
+      tmdb.tvByLang('en'),
+      tmdb.tvByLang('hi'),
+      tmdb.tvByLang('ko'),
+      tmdb.anime(),
+      tmdb.genreTV(10759),
+      tmdb.genreTV(80),
+      tmdb.genreTV(9648),
+      tmdb.genreTV(10765),
+    ]);
+  } catch {
+    return <LoadError title="Could not load TV Series" retryHref="/tv" />;
+  }
   return (
     <div className="mt-6">
       <div className="flex items-center gap-2.5">
@@ -19,6 +36,10 @@ export default async function TVPage() {
       <Row title="Hindi Series" items={hindi.results ?? []} type="tv" href="/browse/tv-hindi" />
       <Row title="Korean Series" items={korean.results ?? []} type="tv" href="/browse/tv-korean" />
       <Row title="Anime" items={anime.results ?? []} type="tv" href="/browse/anime" />
+      <Row title="Action & Adventure" items={action.results ?? []} type="tv" href="/browse/tv-action" />
+      <Row title="Crime" items={crime.results ?? []} type="tv" href="/browse/tv-crime" />
+      <Row title="Mystery" items={mystery.results ?? []} type="tv" href="/browse/tv-mystery" />
+      <Row title="Sci-Fi & Fantasy" items={scifi.results ?? []} type="tv" href="/browse/tv-scifi" />
       <ContinueWatching />
     </div>
   );

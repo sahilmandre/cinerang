@@ -1,10 +1,21 @@
-import { tmdb, poster } from '@/lib/tmdb';
+import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
+import { genreSlug } from '@/lib/categories';
+import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import Player from '@/components/Player';
 import Row from '@/components/Row';
+import LoadError from '@/components/LoadError';
 import { Star, Clock, Calendar } from 'lucide-react';
 
 export default async function WatchMovie({ params }: { params: { id: string } }) {
-  const d = await tmdb.movieDetails(params.id);
+  let d: any = null;
+  try {
+    d = await tmdb.movieDetails(params.id);
+  } catch {
+    /* handled below */
+  }
+  if (!d?.id)
+    return <LoadError title="Could not load this title" retryHref={`/watch/movie/${params.id}`} />;
+  const adult = isAdultTitle(d);
   const trailer = d.videos?.results?.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
   return (
     <div className="mt-5">
@@ -22,9 +33,21 @@ export default async function WatchMovie({ params }: { params: { id: string } })
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Player tmdbId={params.id} type="movie" title={d.title} posterPath={d.poster_path} />
+          <Player
+            tmdbId={params.id}
+            type="movie"
+            title={d.title}
+            posterPath={d.poster_path}
+            adult={adult}
+            defaultServer={adult ? ADULT_DEFAULT_SERVER : undefined}
+          />
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight md:text-3xl">{d.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+            {adult ? (
+              <span className="rounded-md bg-red-600 px-2 py-1 text-xs font-extrabold text-white">
+                18+ Adult
+              </span>
+            ) : null}
             {d.vote_average ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2.5 py-1 font-bold text-amber-300">
                 <Star size={12} className="fill-amber-400 text-amber-400" />
@@ -41,11 +64,22 @@ export default async function WatchMovie({ params }: { params: { id: string } })
                 <Clock size={12} /> {d.runtime} min
               </span>
             ) : null}
-            {(d.genres ?? []).slice(0, 3).map((g: any) => (
-              <span key={g.id} className="rounded-full bg-white/5 px-2.5 py-1 text-white/60">
-                {g.name}
-              </span>
-            ))}
+            {(d.genres ?? []).slice(0, 5).map((g: any) => {
+              const slug = genreSlug('movie', g.id);
+              return slug ? (
+                <a
+                  key={g.id}
+                  href={`/browse/${slug}`}
+                  className="rounded-full bg-white/5 px-2.5 py-1 text-white/60 transition hover:border hover:border-accent/40 hover:text-white"
+                >
+                  {g.name}
+                </a>
+              ) : (
+                <span key={g.id} className="rounded-full bg-white/5 px-2.5 py-1 text-white/60">
+                  {g.name}
+                </span>
+              );
+            })}
           </div>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/75">{d.overview}</p>
           {trailer && (

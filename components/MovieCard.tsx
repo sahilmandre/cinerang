@@ -10,6 +10,7 @@ export interface TMDBItem {
   backdrop_path?: string | null;
   media_type?: string;
   vote_average?: number;
+  adult?: boolean;
 }
 
 export function mediaTypeOf(item: TMDBItem, fallback: 'movie' | 'tv' = 'movie') {
@@ -22,10 +23,13 @@ export default function MovieCard({
   item,
   forceType,
   fluid = false,
+  markAdult = false,
 }: {
   item: TMDBItem;
   forceType?: 'movie' | 'tv';
   fluid?: boolean;
+  /** Force the 18+ badge — used in gated 18+ sections where every title is mature by curation. */
+  markAdult?: boolean;
 }) {
   const type = forceType ?? mediaTypeOf(item);
   const title = item.title ?? item.name ?? 'Unknown';
@@ -48,6 +52,11 @@ export default function MovieCard({
           <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold backdrop-blur">
             <Star size={10} className="fill-amber-400 text-amber-400" />
             {item.vote_average.toFixed(1)}
+          </span>
+        ) : null}
+        {item.adult || markAdult ? (
+          <span className="absolute right-1.5 top-1.5 rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-extrabold shadow-lg">
+            18+
           </span>
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />

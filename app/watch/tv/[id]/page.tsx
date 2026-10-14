@@ -1,6 +1,9 @@
-import { tmdb, poster } from '@/lib/tmdb';
+import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
+import { genreSlug } from '@/lib/categories';
+import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import Player from '@/components/Player';
 import Row from '@/components/Row';
+import LoadError from '@/components/LoadError';
 import { Star } from 'lucide-react';
 
 export default async function WatchTV({
@@ -10,7 +13,16 @@ export default async function WatchTV({
   params: { id: string };
   searchParams: { s?: string; e?: string };
 }) {
-  const d = await tmdb.tvDetails(params.id);
+  let d: any = null;
+  try {
+    d = await tmdb.tvDetails(params.id);
+  } catch {
+    /* handled below */
+  }
+  if (!d?.id)
+    return <LoadError title="Could not load this title" retryHref={`/watch/tv/${params.id}`} />;
+  const adult = isAdultTitle(d);
+  const trailer = d.videos?.results?.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
   const season = Number(searchParams.s) || 1;
   const episode = Number(searchParams.e) || 1;
   const seasons: { season_number: number; episode_count: number; name: string }[] = (d.seasons ?? []).filter(
@@ -39,9 +51,16 @@ export default async function WatchTV({
             posterPath={d.poster_path}
             initialSeason={season}
             initialEpisode={episode}
+            adult={adult}
+            defaultServer={adult ? ADULT_DEFAULT_SERVER : undefined}
           />
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight md:text-3xl">{d.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+            {adult ? (
+              <span className="rounded-md bg-red-600 px-2 py-1 text-xs font-extrabold text-white">
+                18+ Adult
+              </span>
+            ) : null}
             {d.vote_average ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2.5 py-1 font-bold text-amber-300">
                 <Star size={12} className="fill-amber-400 text-amber-400" />
@@ -56,8 +75,33 @@ export default async function WatchTV({
                 {d.number_of_seasons} season{d.number_of_seasons > 1 ? 's' : ''}
               </span>
             ) : null}
+            {(d.genres ?? []).slice(0, 5).map((g: any) => {
+              const slug = genreSlug('tv', g.id);
+              return slug ? (
+                <a
+                  key={g.id}
+                  href={`/browse/${slug}`}
+                  className="rounded-full bg-white/5 px-2.5 py-1 text-white/60 transition hover:border hover:border-accent/40 hover:text-white"
+                >
+                  {g.name}
+                </a>
+              ) : (
+                <span key={g.id} className="rounded-full bg-white/5 px-2.5 py-1 text-white/60">
+                  {g.name}
+                </span>
+              );
+            })}
           </div>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/75">{d.overview}</p>
+          {trailer && (
+            <a
+              href={`https://www.youtube.com/watch?v=${trailer.key}`}
+              target="_blank"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/80 transition hover:border-accent/50 hover:text-white"
+            >
+              ▶ Official trailer <span className="text-xs text-white/40">(YouTube)</span>
+            </a>
+          )}
 
           <div className="mt-5 rounded-2xl border border-white/[0.07] bg-card/60 p-4">
             <h3 className="text-sm font-bold uppercase tracking-wide text-white/50">Seasons</h3>

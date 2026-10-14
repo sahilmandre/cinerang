@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { SERVERS, getEmbedUrl, MediaType } from '@/lib/servers';
+import { SERVERS, getEmbedUrl, MediaType, ADULT_DEFAULT_SERVER, orderedServers } from '@/lib/servers';
 import { saveContinue } from '@/lib/storage';
 
 export default function Player({
@@ -10,6 +10,8 @@ export default function Player({
   posterPath,
   initialSeason = 1,
   initialEpisode = 1,
+  defaultServer,
+  adult = false,
 }: {
   tmdbId: string;
   type: MediaType;
@@ -17,15 +19,22 @@ export default function Player({
   posterPath: string | null;
   initialSeason?: number;
   initialEpisode?: number;
+  defaultServer?: string;
+  adult?: boolean;
 }) {
-  const [server, setServer] = useState('2embed');
+  const fallback = defaultServer ?? (adult ? ADULT_DEFAULT_SERVER : '2embed');
+  // 18+ titles: adult-resolving servers are listed first so the user
+  // starts where the copy is most likely to exist — no blind trial.
+  const list = orderedServers(adult);
+  const recommended = adult ? (defaultServer ?? ADULT_DEFAULT_SERVER) : null;
+  const [server, setServer] = useState(fallback);
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
   const [key, setKey] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   // Servers already tried for this title/episode. Auto-failover walks this
   // list so one dead embed doesn't trap the viewer; stops after all tried.
-  const triedRef = useRef<string[]>(['2embed']);
+  const triedRef = useRef<string[]>([fallback]);
 
   const episodeKey = `${tmdbId}-${season}-${episode}`;
   useEffect(() => {
@@ -49,7 +58,7 @@ export default function Player({
   // player (e.g. "no copy for this title") are cross-origin and invisible
   // to us — use "Try next server" for those.
   const autoAdvance = () => {
-    const remaining = SERVERS.map((s) => s.id).filter((id) => !triedRef.current.includes(id));
+    const remaining = list.map((s) => s.id).filter((id) => !triedRef.current.includes(id));
     if (!remaining.length) {
       setExhausted(true);
       return;
@@ -60,8 +69,8 @@ export default function Player({
     setKey((k) => k + 1);
   };
 
-  const nextUntried = SERVERS.map((s) => s.id).find((id) => !triedRef.current.includes(id));
-  const nextName = SERVERS.find((s) => s.id === nextUntried)?.name;
+  const nextUntried = list.map((s) => s.id).find((id) => !triedRef.current.includes(id));
+  const nextName = list.find((s) => s.id === nextUntried)?.name;
 
   const persist = (s = season, e = episode) =>
     saveContinue({
@@ -76,8 +85,19 @@ export default function Player({
 
   return (
     <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-white/45">Video Sources</h2>
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/40">
+          {SERVERS.length} servers · auto-failover
+        </span>
+        {adult ? (
+          <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-300">
+            18+ title — adult-resolving servers listed first, start with ★
+          </span>
+        ) : null}
+      </div>
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 p-2.5 backdrop-blur">
-        {SERVERS.map((s) => (
+        {list.map((s) => (
           <button
             key={s.id}
             onClick={() => {
@@ -90,7 +110,13 @@ export default function Player({
                 : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/40 hover:text-white'
             }`}
           >
+            {s.id === recommended ? '★ ' : null}
             {s.name}
+            {adult && s.adultOk ? (
+              <span className="ml-1.5 rounded bg-red-500/25 px-1 py-px text-[10px] font-extrabold text-red-200">
+                18+
+              </span>
+            ) : null}
           </button>
         ))}
         <a

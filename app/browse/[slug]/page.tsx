@@ -2,11 +2,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { tmdb } from '@/lib/tmdb';
+import AdultGate from '@/components/AdultGate';
+import LoadError from '@/components/LoadError';
 import MovieCard, { TMDBItem } from '@/components/MovieCard';
 
 interface Category {
   title: string;
   type?: 'movie' | 'tv';
+  adultOnly?: boolean;
   load: (page: number) => Promise<{ results: TMDBItem[]; total_pages: number }>;
 }
 
@@ -35,6 +38,47 @@ const CATEGORIES: Record<string, Category> = {
   'tv-english': { title: 'English TV Series', type: 'tv', load: (p) => tmdb.tvByLang('en', p) },
   'tv-hindi': { title: 'Hindi TV Series', type: 'tv', load: (p) => tmdb.tvByLang('hi', p) },
   'tv-korean': { title: 'Korean TV Series', type: 'tv', load: (p) => tmdb.tvByLang('ko', p) },
+  // Movie genre sub-categories
+  'movie-action': { title: 'Action Movies', type: 'movie', load: (p) => tmdb.genreMovies(28, p) },
+  'movie-comedy': { title: 'Comedy Movies', type: 'movie', load: (p) => tmdb.genreMovies(35, p) },
+  'movie-crime': { title: 'Crime Movies', type: 'movie', load: (p) => tmdb.genreMovies(80, p) },
+  'movie-thriller': { title: 'Thriller Movies', type: 'movie', load: (p) => tmdb.genreMovies(53, p) },
+  'movie-horror': { title: 'Horror Movies', type: 'movie', load: (p) => tmdb.genreMovies(27, p) },
+  'movie-romance': { title: 'Romance Movies', type: 'movie', load: (p) => tmdb.genreMovies(10749, p) },
+  // TV genre sub-categories
+  'tv-action': { title: 'Action & Adventure Series', type: 'tv', load: (p) => tmdb.genreTV(10759, p) },
+  'tv-comedy': { title: 'Comedy Series', type: 'tv', load: (p) => tmdb.genreTV(35, p) },
+  'tv-crime': { title: 'Crime Series', type: 'tv', load: (p) => tmdb.genreTV(80, p) },
+  'tv-drama': { title: 'Drama Series', type: 'tv', load: (p) => tmdb.genreTV(18, p) },
+  'tv-mystery': { title: 'Mystery Series', type: 'tv', load: (p) => tmdb.genreTV(9648, p) },
+  'tv-scifi': { title: 'Sci-Fi & Fantasy Series', type: 'tv', load: (p) => tmdb.genreTV(10765, p) },
+  'tv-reality': { title: 'Reality Series', type: 'tv', load: (p) => tmdb.genreTV(10764, p) },
+  // 18+ only — age-gated brand/keyword curation, excluded from the main catalog.
+  // Every item here is mature by construction (verified against the live API).
+  'adult-movies': {
+    title: 'Erotic Movies (18+)',
+    type: 'movie',
+    adultOnly: true,
+    load: (p) => tmdb.eroticMovies(p),
+  },
+  'adult-tv': {
+    title: 'Erotic Series (18+)',
+    type: 'tv',
+    adultOnly: true,
+    load: (p) => tmdb.eroticTV(p),
+  },
+  vivamax: {
+    title: 'Vivamax Films (18+)',
+    type: 'movie',
+    adultOnly: true,
+    load: (p) => tmdb.vivamax(p),
+  },
+  ullu: {
+    title: 'Ullu Originals (18+)',
+    type: 'tv',
+    adultOnly: true,
+    load: (p) => tmdb.ullu(p),
+  },
 };
 
 export default async function BrowsePage({
@@ -47,7 +91,17 @@ export default async function BrowsePage({
   const cat = CATEGORIES[params.slug];
   if (!cat) notFound();
   const page = Math.min(Math.max(Number(searchParams.page) || 1, 1), 500);
-  const data = await cat.load(page);
+  let data: { results: TMDBItem[]; total_pages: number };
+  try {
+    data = await cat.load(page);
+  } catch {
+    return (
+      <LoadError
+        title={`Could not load ${cat.title}`}
+        retryHref={`/browse/${params.slug}?page=${page}`}
+      />
+    );
+  }
   const totalPages = Math.min(data.total_pages ?? 1, 500);
 
   const pageLink = (p: number) => `/browse/${params.slug}?page=${p}`;
@@ -55,21 +109,33 @@ export default async function BrowsePage({
 
   return (
     <div className="mt-6">
-      <div className="flex items-center gap-2.5">
-        <span className="h-6 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span
+          className={`h-6 w-1 rounded-full ${
+            cat.adultOnly
+              ? 'bg-gradient-to-b from-red-500 to-red-800'
+              : 'bg-gradient-to-b from-accent to-emerald-500'
+          }`}
+        />
         <h1 className="text-2xl font-extrabold tracking-tight">{cat.title}</h1>
+        {cat.adultOnly ? (
+          <span className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-extrabold text-white">
+            18+
+          </span>
+        ) : null}
         <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-white/40">
           Page {page} of {totalPages}
         </span>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-        {(data.results ?? [])
-          .filter((m) => m.poster_path)
-          .map((m) => (
-            <MovieCard key={m.id} item={m} forceType={cat.type} fluid />
-          ))}
-      </div>
+      {cat.adultOnly ? (
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-300/80">
+          Adults only — mature collection kept separate from the main catalog.
+          By viewing you confirm you are 18 or older.
+        </p>
+      ) : null}
+
+      <BrowseGrid items={data.results ?? []} type={cat.type} adultOnly={cat.adultOnly} />
 
       {totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2">
@@ -106,4 +172,26 @@ export default async function BrowsePage({
       )}
     </div>
   );
+}
+
+function BrowseGrid({
+  items,
+  type,
+  adultOnly,
+}: {
+  items: TMDBItem[];
+  type?: 'movie' | 'tv';
+  adultOnly?: boolean;
+}) {
+  const grid = (
+    <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+      {items
+        .filter((m) => m.poster_path)
+        .map((m) => (
+          <MovieCard key={m.id} item={m} forceType={type} fluid markAdult={adultOnly} />
+        ))}
+    </div>
+  );
+  if (adultOnly) return <AdultGate>{grid}</AdultGate>;
+  return grid;
 }

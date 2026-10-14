@@ -7,11 +7,13 @@ export default function Row({
   items,
   type,
   href,
+  markAdult = false,
 }: {
   title: string;
   items: TMDBItem[];
   type?: 'movie' | 'tv';
   href?: string;
+  markAdult?: boolean;
 }) {
   if (!items?.length) return null;
   return (
@@ -33,7 +35,7 @@ export default function Row({
       </div>
       <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
         {items.map((m) => (
-          <MovieCard key={`${type ?? m.media_type ?? 'x'}-${m.id}`} item={m} forceType={type} />
+          <MovieCard key={`${type ?? m.media_type ?? 'x'}-${m.id}`} item={m} forceType={type} markAdult={markAdult} />
         ))}
       </div>
     </section>

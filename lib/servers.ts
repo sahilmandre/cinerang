@@ -15,6 +15,8 @@ export type MediaType = 'movie' | 'tv';
 export interface VideoServer {
   id: string;
   name: string;
+  /** Full-catalog embeds that also resolve explicit/adult TMDB ids. */
+  adultOk?: boolean;
   movieUrl: (tmdbId: string) => string;
   tvUrl: (tmdbId: string, season: number, episode: number) => string;
 }
@@ -91,7 +93,28 @@ export const SERVERS: VideoServer[] = [
     movieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
     tvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
   },
+  {
+    // V2 embed, same TMDB-id model with a wide catalog including
+    // adult titles. Verified Oct 2026 via DNS-over-HTTPS: resolves
+    // (Cloudflare). Default player for 18+ titles.
+    // NOTE: embed.su was removed — its domain is parked (no DNS
+    // records) as of Oct 2026. Re-add if it returns.
+    id: 'vidsrc-cc',
+    name: 'VidSrc.cc',
+    adultOk: true,
+    movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`,
+  },
 ];
+
+/** Default player for 18+ titles (full-catalog, adult-resolving). */
+export const ADULT_DEFAULT_SERVER = 'vidsrc-cc';
+
+/** Button order: adult-resolving servers first for 18+ titles. */
+export function orderedServers(adult = false): VideoServer[] {
+  if (!adult) return SERVERS;
+  return [...SERVERS].sort((a, b) => Number(b.adultOk ?? false) - Number(a.adultOk ?? false));
+}
 
 export function getEmbedUrl(
   serverId: string,
