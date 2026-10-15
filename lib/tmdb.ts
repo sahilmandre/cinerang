@@ -7,7 +7,33 @@ const MAX_ATTEMPTS = 4;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function tmdbFetch(path: string) {
+// Cache budgets (seconds) — the main lever against TMDB rate limits.
+// Slow-moving catalog rows and details get long TTLs; only
+// rapidly-changing data (trending, airing-season episodes) revalidates
+// often. Served stale-while-revalidate: users never wait on TMDB.
+const TTL = {
+  trending: 6 * 3600, // popular / top-rated / trending lists
+  catalog: 12 * 3600, // genre, language, regional, 18+ rows
+  search: 30 * 60, // per-query results
+  details: 24 * 3600, // movie / TV metadata rarely changes
+  season: 6 * 3600, // episode lists of airing shows change
+} as const;
+
+// Burst collapsing: concurrent identical requests (cold cache + many users
+// at once) share a single upstream fetch instead of stampeding TMDB.
+// Only in-flight requests are shared — errors are never cached.
+const inflight = new Map<string, Promise<unknown>>();
+function singleflight<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+  const p = run().finally(() => {
+    if (inflight.get(key) === p) inflight.delete(key);
+  });
+  inflight.set(key, p);
+  return p;
+}
+
+async function tmdbFetch(path: string, revalidate = TTL.catalog) {
   const url = `https://api.themoviedb.org/3${path}${path.includes('?') ? '&' : '?'}language=en-US`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   let finalUrl = url;
@@ -16,65 +42,71 @@ async function tmdbFetch(path: string) {
   } else if (API_KEY) {
     finalUrl += `&api_key=${API_KEY}`;
   } else {
-    throw new Error('Missing NEXT_PUBLIC_TMDB_API_KEY or NEXT_PUBLIC_TMDB_ACCESS_TOKEN in .env.local');
+    throw new Error('Missing TMDB credentials: set NEXT_PUBLIC_TMDB_API_KEY or NEXT_PUBLIC_TMDB_ACCESS_TOKEN');
   }
   // Retry with exponential backoff + jitter: TMDB (or middleboxes/VPNs on
   // some networks) intermittently reset TLS connections (ECONNRESET), and
   // burst-parallel pages (/movies fires ~10 calls at once) multiply the
   // odds. Each attempt also gets its own timeout so a hung socket can't
   // stall the page, and 429s respect Retry-After instead of hammering.
-  let lastErr: unknown = null;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetch(finalUrl, {
-        headers,
-        next: { revalidate: 3600 },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (res.status === 429) {
-        const retryAfterSec = Number(res.headers.get('retry-after')) || 0;
-        lastErr = new Error(`TMDB rate limited (429) for ${path}`);
-        await sleep(Math.min(retryAfterSec ? retryAfterSec * 1000 : 1500 * (attempt + 1), 10000));
-        continue;
+  // Burst collapsing + persistent cache: concurrent identical calls share
+  // one upstream request; successes are cached for the endpoint's TTL.
+  return singleflight(finalUrl, async () => {
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(finalUrl, {
+          headers,
+          next: { revalidate },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        if (res.status === 429) {
+          const retryAfterSec = Number(res.headers.get('retry-after')) || 0;
+          lastErr = new Error(`TMDB rate limited (429) for ${path}`);
+          await sleep(Math.min(retryAfterSec ? retryAfterSec * 1000 : 1500 * (attempt + 1), 10000));
+          continue;
+        }
+        if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
+        return res.json();
+      } catch (e) {
+        lastErr = e;
+        // ~0.8s → 1.6s → 3.2s → 6.4s (+ jitter), so parallel bursts desync.
+        await sleep(800 * 2 ** attempt + Math.random() * 300);
       }
-      if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
-      return res.json();
-    } catch (e) {
-      lastErr = e;
-      // ~0.8s → 1.6s → 3.2s → 6.4s (+ jitter), so parallel bursts desync.
-      await sleep(800 * 2 ** attempt + Math.random() * 300);
     }
-  }
-  throw lastErr;
+    throw lastErr;
+  });
 }
 
 export const tmdb = {
   trending: (type: 'movie' | 'tv' | 'all' = 'all', page = 1) =>
-    tmdbFetch(`/trending/${type}/week?page=${page}`),
-  popularMovies: (page = 1) => tmdbFetch(`/movie/popular?page=${page}`),
-  popularTV: (page = 1) => tmdbFetch(`/tv/popular?page=${page}`),
-  topRatedMovies: (page = 1) => tmdbFetch(`/movie/top_rated?page=${page}`),
+    tmdbFetch(`/trending/${type}/week?page=${page}`, TTL.trending),
+  popularMovies: (page = 1) => tmdbFetch(`/movie/popular?page=${page}`, TTL.trending),
+  popularTV: (page = 1) => tmdbFetch(`/tv/popular?page=${page}`, TTL.trending),
+  topRatedMovies: (page = 1) => tmdbFetch(`/movie/top_rated?page=${page}`, TTL.trending),
   anime: (page = 1) =>
-    tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   bollywood: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   southTamil: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   southTelugu: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   search: (q: string, page = 1) =>
-    tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false&page=${page}`),
-  movieDetails: (id: string) => tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar,keywords`),
-  tvDetails: (id: string) => tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar,keywords`),
-  seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`),
+    tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false&page=${page}`, TTL.search),
+  movieDetails: (id: string) =>
+    tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar,keywords`, TTL.details),
+  tvDetails: (id: string) =>
+    tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar,keywords`, TTL.details),
+  seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`, TTL.season),
   moviesByLang: (lang: string, page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   tvByLang: (lang: string, page = 1) =>
-    tmdbFetch(`/discover/tv?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/tv?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   genreMovies: (genreId: number, page = 1) =>
-    tmdbFetch(`/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   genreTV: (genreId: number, page = 1) =>
-    tmdbFetch(`/discover/tv?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`),
+    tmdbFetch(`/discover/tv?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   // 18+ / mature discovery. Verified Oct 2026 against the live API:
   // popularity-sorted discover with include_adult=true returns 0/20
   // `adult`-flagged items (TMDB barely uses the flag), so these lists
@@ -101,7 +133,7 @@ export const tmdb = {
       `/discover/tv?with_keywords=256466&include_adult=true&sort_by=popularity.desc&page=${page}`
     ),
   searchAdult: (q: string, page = 1) =>
-    tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=true&page=${page}`),
+    tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=true&page=${page}`, TTL.search),
 };
 
 export const poster = (path: string | null, size = 'w500') =>
