@@ -92,6 +92,7 @@ export default function LiveSearch() {
           value={q}
           role="combobox"
           aria-expanded={showDropdown}
+          aria-autocomplete="list"
           aria-controls={listId}
           aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
           autoComplete="off"

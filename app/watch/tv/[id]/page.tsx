@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import Image from 'next/image';
+import { notFound } from 'next/navigation';
 import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
 import { genreSlug } from '@/lib/categories';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
@@ -9,6 +11,26 @@ import LoadError from '@/components/LoadError';
 import { Star, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}) {
+  if (!/^\d+$/.test(params.id)) return { title: 'Not found — CineRang' };
+  // Served from the shared fetch cache + singleflight: no extra TMDB call.
+  const d = await tmdb.tvDetails(params.id).catch(() => null);
+  if (!d?.id) return { title: 'Not found — CineRang' };
+  return {
+    title: `${d.name} — Watch | CineRang`,
+    description: (d.overview ?? 'Watch now on CineRang.').slice(0, 160),
+    openGraph: {
+      title: d.name,
+      description: (d.overview ?? '').slice(0, 200),
+      images: d.poster_path ? [poster(d.poster_path, 'w500')] : [],
+    },
+  };
+}
+
 export default async function WatchTV({
   params,
   searchParams,
@@ -16,6 +38,7 @@ export default async function WatchTV({
   params: { id: string };
   searchParams: { s?: string; e?: string };
 }) {
+  if (!/^\d+$/.test(params.id)) notFound();
   let d: any = null;
   try {
     d = await tmdb.tvDetails(params.id);
@@ -26,22 +49,27 @@ export default async function WatchTV({
     return <LoadError title="Could not load this title" retryHref={`/watch/tv/${params.id}`} />;
   const adult = isAdultTitle(d);
   const trailer = d.videos?.results?.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
-  const season = Math.max(1, Number(searchParams.s) || 1);
-  const episode = Math.max(1, Number(searchParams.e) || 1);
+  const season = Math.min(40, Math.max(1, Number(searchParams.s) || 1));
+  const episode = Math.min(200, Math.max(1, Number(searchParams.e) || 1));
   const seasons: { season_number: number; episode_count: number; name: string }[] = (d.seasons ?? []).filter(
     (s: any) => s.season_number > 0
   );
-  const seasonData = await tmdb.seasonDetails(params.id, season).catch(() => null);
-  const ext = await tmdb.tvExternalIds(params.id).catch(() => null);
+  // Independent calls — fetch together instead of sequentially.
+  const [seasonData, ext] = await Promise.all([
+    tmdb.seasonDetails(params.id, season).catch(() => null),
+    tmdb.tvExternalIds(params.id).catch(() => null),
+  ]);
   const episodeCount: number | undefined = seasonData?.episodes?.length;
   return (
     <div className="mt-4 md:mt-5">
       <div className="relative -mx-4 overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={poster(d.backdrop_path ?? d.poster_path, 'w1280')}
           alt=""
           aria-hidden
+          width={1280}
+          height={720}
+          sizes="100vw"
           className="h-36 w-full object-cover object-top opacity-40 blur-[2px] sm:h-44 md:h-64"
         />
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-base via-base/70 to-base/20" />
@@ -175,11 +203,13 @@ export default async function WatchTV({
         </div>
         <aside className="lg:col-span-1">
           <div className="flex gap-4 lg:block">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={poster(d.poster_path, 'w500')}
               alt={`${d.name} poster`}
+              width={500}
+              height={750}
               loading="lazy"
+              sizes="(max-width: 1024px) 128px, 400px"
               className="w-24 shrink-0 self-start rounded-2xl border border-white/10 shadow-card sm:w-32 lg:w-full"
             />
             <div className="min-w-0 flex-1 rounded-2xl border border-white/[0.07] bg-card/60 p-4 lg:mt-4">

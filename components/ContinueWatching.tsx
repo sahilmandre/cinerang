@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Play, Trash2, X } from 'lucide-react';
 import { getContinue, removeContinue, clearContinue, ContinueItem } from '@/lib/storage';
 import { poster } from '@/lib/tmdb';
@@ -21,7 +22,7 @@ export default function ContinueWatching() {
   };
 
   return (
-    <section aria-labelledby={headingId} className="mt-8 scroll-mt-24 md:mt-9">
+    <section aria-labelledby={headingId} className="cv-auto mt-8 scroll-mt-24 md:mt-9">
       <div className="mb-3 flex items-center gap-2.5">
         <span aria-hidden className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
         <h2 id={headingId} className="text-base font-bold tracking-tight text-ink sm:text-lg">
@@ -53,12 +54,14 @@ export default function ContinueWatching() {
               className="block overflow-hidden rounded-xl border border-white/[0.07] bg-card shadow-card transition duration-300 hover:-translate-y-1 hover:border-accent/50 focus-visible:-translate-y-1 focus-visible:border-accent/50"
             >
               <div className="relative overflow-hidden bg-white/[0.04]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={poster(c.poster, 'w342')}
                   alt=""
                   aria-hidden
+                  width={340}
+                  height={510}
                   loading="lazy"
+                  sizes="170px"
                   className="aspect-[2/3] w-full object-cover transition duration-500 group-hover:scale-105"
                 />
                 <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-80" />

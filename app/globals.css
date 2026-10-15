@@ -94,6 +94,15 @@ body {
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
     animation: shimmer 1.6s infinite;
   }
+  /* Browser-native rendering virtualization for long card lists:
+     offscreen sections skip layout/style/paint until scrolled near.
+     (Full JS list-window virtualization isn't warranted: rows hold ~20
+     cards and browse grids are paginated — this gives the same skipped
+     work with zero runtime cost.) */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 320px;
+  }
 }
 
 /* Number inputs: hide spinners for compact S/E fields */

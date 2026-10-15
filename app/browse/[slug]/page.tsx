@@ -81,6 +81,11 @@ const CATEGORIES: Record<string, Category> = {
   },
 };
 
+export function generateMetadata({ params }: { params: { slug: string } }) {
+  const cat = CATEGORIES[params.slug];
+  return { title: cat ? `${cat.title} — CineRang` : 'Not found — CineRang' };
+}
+
 export default async function BrowsePage({
   params,
   searchParams,
@@ -188,7 +193,7 @@ function BrowseGrid({
   adultOnly?: boolean;
 }) {
   const grid = (
-    <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+    <div className="cv-auto mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
       {items
         .filter((m) => m.poster_path)
         .map((m) => (

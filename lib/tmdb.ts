@@ -1,6 +1,8 @@
 export const TMDB_IMAGE = 'https://image.tmdb.org/t/p';
-const API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-const TOKEN = process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN;
+// Prefer server-only secrets (never bundled to the browser); fall back
+// to the NEXT_PUBLIC_* values for backwards compatibility.
+const API_KEY = process.env.TMDB_API_KEY ?? process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const TOKEN = process.env.TMDB_ACCESS_TOKEN ?? process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN;
 
 const FETCH_TIMEOUT_MS = 12000;
 const MAX_ATTEMPTS = 4;
@@ -54,6 +56,7 @@ async function tmdbFetch(path: string, revalidate = TTL.catalog) {
   return singleflight(finalUrl, async () => {
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const last = attempt === MAX_ATTEMPTS - 1;
       try {
         const res = await fetch(finalUrl, {
           headers,
@@ -61,17 +64,22 @@ async function tmdbFetch(path: string, revalidate = TTL.catalog) {
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
         if (res.status === 429) {
-          const retryAfterSec = Number(res.headers.get('retry-after')) || 0;
           lastErr = new Error(`TMDB rate limited (429) for ${path}`);
+          if (last) throw lastErr;
+          const retryAfterSec = Number(res.headers.get('retry-after')) || 0;
           await sleep(Math.min(retryAfterSec ? retryAfterSec * 1000 : 1500 * (attempt + 1), 10000));
           continue;
         }
+        // Deterministic client errors (bad key, unknown id, bad params)
+        // never succeed on retry — fail fast instead of stalling ~12s.
         if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
         return res.json();
       } catch (e) {
+        if (e instanceof Error && /^TMDB error 4\d\d/.test(e.message)) throw e;
         lastErr = e;
-        // ~0.8s → 1.6s → 3.2s → 6.4s (+ jitter), so parallel bursts desync.
-        await sleep(800 * 2 ** attempt + Math.random() * 300);
+        // ~0.8s → 1.6s → 3.2s (+ jitter), so parallel bursts desync.
+        // No sleep after the final attempt — throw immediately.
+        if (!last) await sleep(800 * 2 ** attempt + Math.random() * 300);
       }
     }
     throw lastErr;

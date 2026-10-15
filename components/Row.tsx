@@ -28,7 +28,7 @@ export default function Row({
   };
 
   return (
-    <section aria-labelledby={headingId} className="mt-8 scroll-mt-24 md:mt-9">
+    <section aria-labelledby={headingId} className="cv-auto mt-8 scroll-mt-24 md:mt-9">
       <div className="mb-3 flex items-center gap-2.5">
         <span aria-hidden className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
         <h2 id={headingId} className="text-base font-bold tracking-tight text-ink sm:text-lg">

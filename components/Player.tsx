@@ -10,6 +10,12 @@ import { cn } from '@/lib/utils';
 // (iframe onError rarely fires cross-browser for network failures).
 const LOAD_TIMEOUT_MS = 15000;
 
+// Continue Watching gating: a title counts as "being watched" only after
+// sustained visible engagement. Cross-origin embeds expose no play events,
+// so these two observable proxies are used instead.
+const DWELL_MS = 150000; // 2.5 min of visible, loaded player
+const DWELL_TICK_MS = 5000;
+
 export default function Player({
   tmdbId,
   type,
@@ -61,12 +67,27 @@ export default function Player({
   const [server, setServer] = useState(fallback);
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
+  const [seasonDraft, setSeasonDraft] = useState(String(initialSeason));
+  const [episodeDraft, setEpisodeDraft] = useState(String(initialEpisode));
   const [key, setKey] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  // Mirror of `loaded` for timeout callbacks — setState updaters must stay
+  // pure (StrictMode double-invokes them), so async checks read the ref.
+  const loadedRef = useRef(false);
+  const markLoaded = (v: boolean) => {
+    loadedRef.current = v;
+    setLoaded(v);
+  };
   const [exhausted, setExhausted] = useState(false);
   // Servers already tried for this title/episode. Auto-failover walks this
   // list so one dead embed doesn't trap the viewer; stops after all tried.
   const triedRef = useRef<string[]>([fallback]);
+  // Engagement clock for the Continue Watching gate. Accumulates only
+  // while the player frame has loaded AND the tab is visible — background
+  // tabs and never-loaded embeds don't count.
+  const dwellAccumRef = useRef(0);
+  const dwellFiredRef = useRef(false);
+  const persistRef = useRef(() => {});
   const current = list.find((s) => s.id === server);
   const sandboxed = blocker && !!current && !current.noSandbox;
 
@@ -74,24 +95,27 @@ export default function Player({
   useEffect(() => {
     setSeason(initialSeason);
     setEpisode(initialEpisode);
+    setSeasonDraft(String(initialSeason));
+    setEpisodeDraft(String(initialEpisode));
   }, [initialSeason, initialEpisode]);
 
   const episodeKey = `${tmdbId}-${season}-${episode}`;
   useEffect(() => {
     triedRef.current = [server];
     setExhausted(false);
-    setLoaded(false);
+    markLoaded(false);
+    dwellAccumRef.current = 0;
+    dwellFiredRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeKey]);
 
   // Load-timeout failover: complements onError for silent network failures.
+  // Reads loadedRef instead of a setState updater (updaters must be pure —
+  // StrictMode double-invokes them, which used to skip a server).
   useEffect(() => {
-    setLoaded(false);
+    markLoaded(false);
     const t = setTimeout(() => {
-      setLoaded((done) => {
-        if (!done) autoAdvanceRef.current();
-        return done;
-      });
+      if (!loadedRef.current) autoAdvanceRef.current();
     }, LOAD_TIMEOUT_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,7 +137,7 @@ export default function Player({
     if (resetTried) triedRef.current = [id];
     else if (!triedRef.current.includes(id)) triedRef.current.push(id);
     setServer(id);
-    setLoaded(false);
+    markLoaded(false);
     setKey((k) => k + 1);
     setExhausted(false);
   };
@@ -131,7 +155,7 @@ export default function Player({
     const next = remaining[0];
     triedRef.current.push(next);
     setServer(next);
-    setLoaded(false);
+    markLoaded(false);
     setKey((k) => k + 1);
   };
   const autoAdvanceRef = useRef(autoAdvance);
@@ -150,16 +174,65 @@ export default function Player({
       episode: e,
       updatedAt: Date.now(),
     });
+  persistRef.current = persist;
+
+  // Continue Watching gate — the entry is written only on genuine
+  // engagement, never on mere page view / embed render:
+  //   (a) loaded player visible for DWELL_MS (watching, not bouncing),
+  //   (b) fullscreen entered (strongest playback signal available —
+  //       cross-origin frames expose no play events, but the parent
+  //       document still observes its own iframe going fullscreen),
+  //   (c) user drives the player (server switch / episode change persist
+  //       immediately at their call sites).
+  useEffect(() => {
+    const onFullscreen = () => {
+      if (document.fullscreenElement && !dwellFiredRef.current) {
+        dwellFiredRef.current = true;
+        persistRef.current();
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreen);
+    const id = window.setInterval(() => {
+      if (dwellFiredRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+      if (!loadedRef.current) return;
+      dwellAccumRef.current += DWELL_TICK_MS;
+      if (dwellAccumRef.current >= DWELL_MS) {
+        dwellFiredRef.current = true;
+        persistRef.current();
+      }
+    }, DWELL_TICK_MS);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setSeasonEp = (s: number, e: number) => {
-    const safeS = Math.max(1, Math.min(40, s || 1));
-    const safeE = Math.max(1, Math.min(200, e || 1));
+    const safeS = Math.max(1, Math.min(40, Math.floor(s) || 1));
+    const safeE = Math.max(1, Math.min(200, Math.floor(e) || 1));
     setSeason(safeS);
     setEpisode(safeE);
-    setLoaded(false);
+    setSeasonDraft(String(safeS));
+    setEpisodeDraft(String(safeE));
+    markLoaded(false);
     setKey((k) => k + 1);
     persist(safeS, safeE);
     syncUrl(safeS, safeE);
+  };
+
+  // Draft text for the S/E fields: committing on every keystroke used to
+  // reload the iframe per character (and fight the user mid-typing).
+  // Drafts commit on blur / Enter instead; invalid text snaps back.
+  const commitDrafts = () => {
+    const s = Math.max(1, Math.min(40, Math.floor(Number(seasonDraft)) || 1));
+    const e = Math.max(1, Math.min(200, Math.floor(Number(episodeDraft)) || 1));
+    if (s !== season || e !== episode) setSeasonEp(s, e);
+    else {
+      setSeasonDraft(String(s));
+      setEpisodeDraft(String(e));
+    }
   };
 
   return (
@@ -241,7 +314,7 @@ export default function Player({
         </button>
         <button
           onClick={() => {
-            setLoaded(false);
+            markLoaded(false);
             setKey((k) => k + 1);
           }}
           className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
@@ -266,8 +339,12 @@ export default function Player({
             type="number"
             min={1}
             max={40}
-            value={season}
-            onChange={(e) => setSeasonEp(Number(e.target.value), episode)}
+            value={seasonDraft}
+            onChange={(e) => setSeasonDraft(e.target.value)}
+            onBlur={commitDrafts}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
             className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
           />
           <label htmlFor="player-episode" className="text-xs font-semibold uppercase tracking-wide text-white/50">
@@ -278,8 +355,12 @@ export default function Player({
             type="number"
             min={1}
             max={200}
-            value={episode}
-            onChange={(e) => setSeasonEp(season, Number(e.target.value))}
+            value={episodeDraft}
+            onChange={(e) => setEpisodeDraft(e.target.value)}
+            onBlur={commitDrafts}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
             className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
           />
           <button
@@ -303,7 +384,11 @@ export default function Player({
           key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
           src={url}
           onError={autoAdvance}
-          onLoad={() => setLoaded(true)}
+          onLoad={() => {
+            // Embed rendered — starts the engagement clock (dwell timer),
+            // but does NOT itself write Continue Watching.
+            markLoaded(true);
+          }}
           className="relative z-0 aspect-video w-full"
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           allowFullScreen
@@ -320,7 +405,7 @@ export default function Player({
             onClick={() => {
               triedRef.current = [server];
               setExhausted(false);
-              setLoaded(false);
+              markLoaded(false);
               setKey((k) => k + 1);
             }}
             className="font-bold underline hover:text-amber-100"

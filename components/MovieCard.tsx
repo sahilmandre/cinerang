@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Play, Star } from 'lucide-react';
 import { poster } from '@/lib/tmdb';
 import { cn } from '@/lib/utils';
@@ -47,11 +48,13 @@ export default function MovieCard({
       )}
     >
       <div className="relative overflow-hidden bg-white/[0.04]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={poster(item.poster_path, 'w342')}
           alt={title}
+          width={320}
+          height={480}
           loading="lazy"
+          sizes="(max-width: 640px) 136px, (max-width: 768px) 148px, 160px"
           className="aspect-[2/3] w-full object-cover transition duration-500 group-hover:scale-105 group-focus-visible:scale-105"
         />
         {item.vote_average ? (

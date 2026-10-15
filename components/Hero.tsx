@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { poster } from '@/lib/tmdb';
 import { TMDBItem } from './MovieCard';
 import { Play, Star, TrendingUp } from 'lucide-react';
@@ -15,12 +16,14 @@ export default function Hero({ items }: { items: TMDBItem[] }) {
         className="group relative block overflow-hidden rounded-2xl border border-white/10 shadow-card transition duration-300 hover:border-accent/40 md:col-span-2"
         aria-label={`Watch ${title} now`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={poster(first.backdrop_path ?? first.poster_path, 'w1280')}
           alt=""
           aria-hidden
-          fetchPriority="high"
+          width={1280}
+          height={720}
+          priority
+          sizes="(max-width: 768px) 100vw, 66vw"
           className="h-[260px] w-full object-cover transition duration-500 group-hover:scale-[1.03] sm:h-[300px] md:h-[400px]"
         />
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/5" />
@@ -57,12 +60,14 @@ export default function Hero({ items }: { items: TMDBItem[] }) {
             className="group relative block overflow-hidden rounded-2xl border border-white/10 transition duration-300 hover:border-accent/40"
             aria-label={`Watch ${m.title ?? m.name}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={poster(m.backdrop_path ?? m.poster_path, 'w780')}
               alt=""
               aria-hidden
+              width={780}
+              height={440}
               loading="lazy"
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
               className="h-[140px] w-full object-cover transition duration-500 group-hover:scale-[1.04] sm:h-[150px] md:h-[192px]"
             />
             <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
