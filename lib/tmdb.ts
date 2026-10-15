@@ -99,6 +99,7 @@ export const tmdb = {
   tvDetails: (id: string) =>
     tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar,keywords`, TTL.details),
   seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`, TTL.season),
+  tvExternalIds: (id: string) => tmdbFetch(`/tv/${id}/external_ids`, TTL.details),
   moviesByLang: (lang: string, page = 1) =>
     tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   tvByLang: (lang: string, page = 1) =>

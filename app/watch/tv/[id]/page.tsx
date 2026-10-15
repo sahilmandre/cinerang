@@ -3,6 +3,7 @@ import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
 import { genreSlug } from '@/lib/categories';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import Player from '@/components/Player';
+import DownloadBox from '@/components/DownloadBox';
 import Row from '@/components/Row';
 import LoadError from '@/components/LoadError';
 import { Star, Play } from 'lucide-react';
@@ -31,6 +32,7 @@ export default async function WatchTV({
     (s: any) => s.season_number > 0
   );
   const seasonData = await tmdb.seasonDetails(params.id, season).catch(() => null);
+  const ext = await tmdb.tvExternalIds(params.id).catch(() => null);
   const episodeCount: number | undefined = seasonData?.episodes?.length;
   return (
     <div className="mt-4 md:mt-5">
@@ -56,6 +58,15 @@ export default async function WatchTV({
             initialEpisode={episode}
             adult={adult}
             defaultServer={adult ? ADULT_DEFAULT_SERVER : undefined}
+          />
+          <DownloadBox
+            title={d.name}
+            year={d.first_air_date?.slice(0, 4)}
+            type="tv"
+            tmdbId={params.id}
+            imdbId={ext?.imdb_id ?? null}
+            season={season}
+            episode={episode}
           />
           <h1 className="mt-5 text-balance text-2xl font-extrabold tracking-tight md:text-3xl">{d.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">

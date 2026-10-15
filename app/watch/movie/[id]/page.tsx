@@ -3,6 +3,7 @@ import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
 import { genreSlug } from '@/lib/categories';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import Player from '@/components/Player';
+import DownloadBox from '@/components/DownloadBox';
 import Row from '@/components/Row';
 import LoadError from '@/components/LoadError';
 import { Star, Clock, Calendar, Play } from 'lucide-react';
@@ -41,6 +42,13 @@ export default async function WatchMovie({ params }: { params: { id: string } })
             posterPath={d.poster_path}
             adult={adult}
             defaultServer={adult ? ADULT_DEFAULT_SERVER : undefined}
+          />
+          <DownloadBox
+            title={d.title}
+            year={d.release_date?.slice(0, 4)}
+            type="movie"
+            tmdbId={params.id}
+            imdbId={d.imdb_id ?? null}
           />
           <h1 className="mt-5 text-balance text-2xl font-extrabold tracking-tight md:text-3xl">{d.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
