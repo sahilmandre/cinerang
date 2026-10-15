@@ -149,7 +149,59 @@ export function streamDownloadLinks(ctx: DownloadContext, tmdbId: string): Downl
   ];
 }
 
-// --- YTS API (true direct download, no separate server needed) ---
+// --- VidVault: TMDB-keyed DIRECT download server (verified Oct 2026) ---
+//
+// Unlike every FMHY download-site (title-search DDL needing scrapers),
+// VidVault works exactly like the streaming embeds: URL-keyed by TMDB id.
+//   page: https://vidvault.to/movie/{tmdbId}
+//         https://vidvault.to/tv/{tmdbId}/{season}/{episode}
+//   api:  /download-link/.../{quality} -> { url: "<signed .mkv>" }
+// File HEAD: 200 video/x-matroska + Content-Disposition: attachment.
+// Missing conversion -> upstream 404 (probe via /api/vidvault list mode,
+// since browsers can't call vidvault.to directly due to CORS).
+
+export const VIDVAULT_QUALS = ['360p', '480p', '720p', '1080p'];
+
+export function vidvaultPage(ctx: DownloadContext, tmdbId: string): string {
+  return ctx.type === 'tv'
+    ? `https://vidvault.to/tv/${tmdbId}/${ctx.season ?? 1}/${ctx.episode ?? 1}`
+    : `https://vidvault.to/movie/${tmdbId}`;
+}
+
+function vidvaultParams(ctx: DownloadContext, tmdbId: string): string {
+  const p = new URLSearchParams({ type: ctx.type, id: tmdbId });
+  if (ctx.type === 'tv') {
+    p.set('s', String(ctx.season ?? 1));
+    p.set('e', String(ctx.episode ?? 1));
+  }
+  return p.toString();
+}
+
+/** Which VidVault qualities are already converted (via our proxy). */
+export async function fetchVidVaultAvailability(
+  ctx: DownloadContext,
+  tmdbId: string
+): Promise<{ available: string[]; page: string }> {
+  const res = await fetch(`/api/vidvault?${vidvaultParams(ctx, tmdbId)}`, {
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`VidVault ${res.status}`);
+  return res.json();
+}
+
+/** Direct-download URL for one quality (proxied + streamed, fresh signed URL). */
+export function vidvaultFileUrl(ctx: DownloadContext, tmdbId: string, quality: string): string {
+  const p = new URLSearchParams(vidvaultParams(ctx, tmdbId));
+  p.set('quality', quality);
+  if (ctx.title) p.set('title', filenameBase(ctx));
+  return `/api/vidvault?${p.toString()}`;
+}
+
+function filenameBase(ctx: DownloadContext): string {
+  const base = [ctx.title, ctx.year].filter(Boolean).join(' ');
+  if (ctx.type !== 'tv') return base;
+  return `${base} S${String(ctx.season ?? 1).padStart(2, '0')}E${String(ctx.episode ?? 1).padStart(2, '0')}`;
+}
 
 export interface YtsTorrent {
   quality: string;
@@ -158,6 +210,8 @@ export interface YtsTorrent {
   url: string; // .torrent file
   magnet: string;
 }
+
+// --- YTS API (IMDb-keyed torrent download, no separate server needed) ---
 
 export async function fetchYtsTorrents(imdbOrTitle: string): Promise<YtsTorrent[]> {
   // Public YTS API: query_term accepts an IMDb id (tt1234567) or a title.

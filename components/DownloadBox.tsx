@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, Magnet } from 'lucide-react';
-import { ddlLinks, torrentLinks, streamDownloadLinks, fetchYtsTorrents, type YtsTorrent } from '@/lib/downloads';
+import { ddlLinks, torrentLinks, streamDownloadLinks, fetchYtsTorrents, fetchVidVaultAvailability, vidvaultFileUrl, vidvaultPage, type YtsTorrent } from '@/lib/downloads';
 import { cn } from '@/lib/utils';
 
 export default function DownloadBox({
@@ -25,6 +25,23 @@ export default function DownloadBox({
   const [tab, setTab] = useState<'quick' | 'ddl' | 'torrent' | 'hls'>('quick');
   const [yts, setYts] = useState<YtsTorrent[] | null>(null);
   const [ytsError, setYtsError] = useState(false);
+  const [vv, setVv] = useState<string[] | null>(null);
+
+  // VidVault: TMDB-keyed direct MKV. Probe which qualities are converted.
+  useEffect(() => {
+    let live = true;
+    fetchVidVaultAvailability(ctx, tmdbId)
+      .then((r) => {
+        if (live) setVv(r.available);
+      })
+      .catch(() => {
+        if (live) setVv([]);
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmdbId, type, season, episode]);
 
   // Movies: live YTS lookup by IMDb id (falls back to title). TV has no
   // YTS catalog, so the quick tab shows DDL shortcuts instead.
@@ -91,6 +108,42 @@ export default function DownloadBox({
 
       {tab === 'quick' && (
         <div className="mt-3">
+          {/* VidVault: true 1-click MKV, TMDB-keyed like the stream embeds */}
+          <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3">
+            <p className="text-sm font-bold text-white">
+              Direct MKV <span className="ml-1 rounded bg-emerald-500/20 px-1.5 py-px text-[10px] font-extrabold text-emerald-300">1-click</span>
+              <span className="ml-1.5 text-xs font-medium text-white/45">via VidVault</span>
+            </p>
+            {vv === null ? (
+              <p className="mt-1.5 text-sm text-white/50">Checking converted qualities…</p>
+            ) : vv.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {vv.map((q) => (
+                  <a
+                    key={q}
+                    href={vidvaultFileUrl(ctx, tmdbId, q)}
+                    className="inline-flex items-center gap-1 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-bold text-black transition hover:brightness-110"
+                  >
+                    <Download size={13} aria-hidden /> {q} .mkv
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-1.5 text-[13px] leading-relaxed text-white/60">
+                <p>Not converted yet for this {type === 'movie' ? 'movie' : 'episode'}. Open VidVault once to queue the conversion (takes seconds), then come back:</p>
+                <a
+                  href={vidvaultPage(ctx, tmdbId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 rounded-full border border-accent/40 px-3.5 py-1.5 text-[13px] font-semibold text-accent transition hover:bg-accent/10"
+                >
+                  Open VidVault page <ExternalLink size={12} aria-hidden />
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3">
           {type === 'movie' ? (
             yts === null && !ytsError ? (
               <p className="text-sm text-white/50">Checking YTS for direct torrents…</p>
@@ -148,6 +201,7 @@ export default function DownloadBox({
           <p className="mt-2 text-xs leading-relaxed text-white/35">
             Needs a torrent client (qBittorrent) or Debrid (TorBox / Real-Debrid). Use a VPN before torrenting.
           </p>
+          </div>
         </div>
       )}
 
