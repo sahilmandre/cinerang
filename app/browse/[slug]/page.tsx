@@ -138,10 +138,11 @@ export default async function BrowsePage({
       <BrowseGrid items={data.results ?? []} type={cat.type} adultOnly={cat.adultOnly} />
 
       {totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-center gap-2">
+        <nav aria-label="Browse pages" className="mt-8 flex flex-wrap items-center justify-center gap-2">
           {page > 1 && (
             <Link
               href={pageLink(page - 1)}
+              rel="prev"
               className="inline-flex items-center gap-1 rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-accent/50 hover:text-white"
             >
               <ChevronLeft size={14} /> Prev
@@ -151,7 +152,9 @@ export default async function BrowsePage({
             <Link
               key={p}
               href={pageLink(p)}
-              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              aria-current={p === page ? 'page' : undefined}
+              aria-label={`Page ${p}`}
+              className={`rounded-full px-3.5 py-2 text-sm font-medium tabular-nums transition ${
                 p === page
                   ? 'bg-accent font-bold text-black shadow-lg shadow-accent/30'
                   : 'border border-white/10 text-white/70 hover:border-accent/40 hover:text-white'
@@ -163,12 +166,13 @@ export default async function BrowsePage({
           {page < totalPages && (
             <Link
               href={pageLink(page + 1)}
+              rel="next"
               className="inline-flex items-center gap-1 rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-accent/50 hover:text-white"
             >
               Next <ChevronRight size={14} />
             </Link>
           )}
-        </div>
+        </nav>
       )}
     </div>
   );

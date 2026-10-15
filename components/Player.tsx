@@ -1,7 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { RotateCcw, ShieldCheck, ShieldOff, SquareArrowOutUpRight } from 'lucide-react';
 import { SERVERS, getEmbedUrl, MediaType, ADULT_DEFAULT_SERVER, orderedServers } from '@/lib/servers';
 import { saveContinue } from '@/lib/storage';
+import { cn } from '@/lib/utils';
+
+// If a frame neither loads nor errors within this window, treat it as dead
+// (iframe onError rarely fires cross-browser for network failures).
+const LOAD_TIMEOUT_MS = 15000;
 
 export default function Player({
   tmdbId,
@@ -22,6 +29,8 @@ export default function Player({
   defaultServer?: string;
   adult?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const fallback = defaultServer ?? (adult ? ADULT_DEFAULT_SERVER : '2embed');
   // 18+ titles: adult-resolving servers are listed first so the user
   // starts where the copy is most likely to exist — no blind trial.
@@ -53,6 +62,7 @@ export default function Player({
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
   const [key, setKey] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   // Servers already tried for this title/episode. Auto-failover walks this
   // list so one dead embed doesn't trap the viewer; stops after all tried.
@@ -60,27 +70,58 @@ export default function Player({
   const current = list.find((s) => s.id === server);
   const sandboxed = blocker && !!current && !current.noSandbox;
 
+  // Keep local S/E in sync when the URL changes (season / episode links).
+  useEffect(() => {
+    setSeason(initialSeason);
+    setEpisode(initialEpisode);
+  }, [initialSeason, initialEpisode]);
+
   const episodeKey = `${tmdbId}-${season}-${episode}`;
   useEffect(() => {
     triedRef.current = [server];
     setExhausted(false);
+    setLoaded(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeKey]);
 
+  // Load-timeout failover: complements onError for silent network failures.
+  useEffect(() => {
+    setLoaded(false);
+    const t = setTimeout(() => {
+      setLoaded((done) => {
+        if (!done) autoAdvanceRef.current();
+        return done;
+      });
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server, episodeKey, key]);
+
   const url = getEmbedUrl(server, type, tmdbId, season, episode);
+
+  // Sync TV position back to the URL so refresh / share opens the same episode.
+  const syncUrl = (s: number, e: number) => {
+    if (type !== 'tv') return;
+    try {
+      router.replace(`${pathname}?s=${s}&e=${e}`, { scroll: false });
+    } catch {
+      /* non-fatal */
+    }
+  };
 
   const loadServer = (id: string, resetTried = false) => {
     if (resetTried) triedRef.current = [id];
     else if (!triedRef.current.includes(id)) triedRef.current.push(id);
     setServer(id);
+    setLoaded(false);
     setKey((k) => k + 1);
     setExhausted(false);
   };
 
   // Auto-switch: fires when the iframe itself fails to load (dead domain,
-  // DNS block, connection reset). Note: errors rendered *inside* a loaded
-  // player (e.g. "no copy for this title") are cross-origin and invisible
-  // to us — use "Try next server" for those.
+  // DNS block, connection reset) or the load timeout elapses. Note: errors
+  // rendered *inside* a loaded player (e.g. "no copy for this title") are
+  // cross-origin and invisible to us — use "Try next server" for those.
   const autoAdvance = () => {
     const remaining = list.map((s) => s.id).filter((id) => !triedRef.current.includes(id));
     if (!remaining.length) {
@@ -90,8 +131,11 @@ export default function Player({
     const next = remaining[0];
     triedRef.current.push(next);
     setServer(next);
+    setLoaded(false);
     setKey((k) => k + 1);
   };
+  const autoAdvanceRef = useRef(autoAdvance);
+  autoAdvanceRef.current = autoAdvance;
 
   const nextUntried = list.map((s) => s.id).find((id) => !triedRef.current.includes(id));
   const nextName = list.find((s) => s.id === nextUntried)?.name;
@@ -107,11 +151,22 @@ export default function Player({
       updatedAt: Date.now(),
     });
 
+  const setSeasonEp = (s: number, e: number) => {
+    const safeS = Math.max(1, Math.min(40, s || 1));
+    const safeE = Math.max(1, Math.min(200, e || 1));
+    setSeason(safeS);
+    setEpisode(safeE);
+    setLoaded(false);
+    setKey((k) => k + 1);
+    persist(safeS, safeE);
+    syncUrl(safeS, safeE);
+  };
+
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
         <h2 className="text-xs font-bold uppercase tracking-widest text-white/45">Video Sources</h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/40">
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] tabular-nums text-white/40">
           {SERVERS.length} servers · auto-failover
         </span>
         {adult ? (
@@ -120,19 +175,26 @@ export default function Player({
           </span>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 p-2.5 backdrop-blur">
+      <div
+        role="radiogroup"
+        aria-label="Video servers"
+        className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 p-2.5 backdrop-blur"
+      >
         {list.map((s) => (
           <button
             key={s.id}
+            role="radio"
+            aria-checked={server === s.id}
             onClick={() => {
               loadServer(s.id, true);
               persist();
             }}
-            className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition ${
+            className={cn(
+              'rounded-full px-3 py-1.5 text-[13px] font-medium transition sm:px-3.5',
               server === s.id
                 ? 'bg-accent font-bold text-black shadow-lg shadow-accent/30'
                 : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/40 hover:text-white'
-            }`}
+            )}
           >
             {s.id === recommended ? '★ ' : null}
             {s.name}
@@ -157,28 +219,34 @@ export default function Player({
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
           title="Open player in new tab — use this to test if a blank iframe is an X-Frame/CSP block vs dead source"
         >
-          ↗ Open
+          <SquareArrowOutUpRight size={13} aria-hidden /> Open
         </a>
         <button
           onClick={toggleBlocker}
+          aria-pressed={blocker}
           title="Sandboxed frame blocks popups and tab-hijacks. Turn off if a player refuses to load inside it."
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition',
             blocker
               ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
               : 'border-white/10 text-white/70 hover:border-accent/40 hover:text-white'
-          }`}
+          )}
         >
-          <span className={`h-2 w-2 rounded-full ${blocker ? 'bg-emerald-400' : 'bg-white/25'}`} />
+          {blocker ? <ShieldCheck size={14} aria-hidden /> : <ShieldOff size={14} aria-hidden />}
+          <span aria-hidden className={cn('h-2 w-2 rounded-full', blocker ? 'bg-emerald-400' : 'bg-white/25')} />
           Blocker {blocker ? 'on' : 'off'}
         </button>
         <button
-          onClick={() => setKey((k) => k + 1)}
-          className="ml-auto rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
+          onClick={() => {
+            setLoaded(false);
+            setKey((k) => k + 1);
+          }}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
         >
-          ↻ Reload
+          <RotateCcw size={13} aria-hidden /> Reload
         </button>
       </div>
       {blocker && current?.noSandbox ? (
@@ -189,42 +257,33 @@ export default function Player({
       ) : null}
 
       {type === 'tv' && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 px-3 py-2.5 text-sm backdrop-blur">
-          <label className="text-xs font-semibold uppercase tracking-wide text-white/50">Season</label>
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2.5 rounded-2xl border border-white/[0.07] bg-card/60 px-3 py-2.5 text-sm backdrop-blur">
+          <label htmlFor="player-season" className="text-xs font-semibold uppercase tracking-wide text-white/50">
+            Season
+          </label>
           <input
+            id="player-season"
             type="number"
             min={1}
             max={40}
             value={season}
-            onChange={(e) => {
-              const s = Number(e.target.value) || 1;
-              setSeason(s);
-              setKey((k) => k + 1);
-              persist(s, episode);
-            }}
-            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center outline-none focus:border-accent/60"
+            onChange={(e) => setSeasonEp(Number(e.target.value), episode)}
+            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
           />
-          <label className="text-xs font-semibold uppercase tracking-wide text-white/50">Episode</label>
+          <label htmlFor="player-episode" className="text-xs font-semibold uppercase tracking-wide text-white/50">
+            Episode
+          </label>
           <input
+            id="player-episode"
             type="number"
             min={1}
             max={200}
             value={episode}
-            onChange={(e) => {
-              const ep = Number(e.target.value) || 1;
-              setEpisode(ep);
-              setKey((k) => k + 1);
-              persist(season, ep);
-            }}
-            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center outline-none focus:border-accent/60"
+            onChange={(e) => setSeasonEp(season, Number(e.target.value))}
+            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
           />
           <button
-            onClick={() => {
-              const ep = episode + 1;
-              setEpisode(ep);
-              setKey((k) => k + 1);
-              persist(season, ep);
-            }}
+            onClick={() => setSeasonEp(season, episode + 1)}
             className="ml-auto rounded-full bg-accent/15 px-4 py-1.5 font-semibold text-accent transition hover:bg-accent/25"
           >
             Next episode →
@@ -232,17 +291,25 @@ export default function Player({
         </div>
       )}
 
-      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/60 ring-1 ring-white/5">
+      <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card ring-1 ring-white/5">
+        {!loaded && !exhausted && (
+          <div aria-hidden className="shimmer absolute inset-0 z-10 grid place-items-center bg-white/[0.03]">
+            <p className="rounded-full bg-black/60 px-4 py-1.5 text-xs font-medium text-white/60 backdrop-blur">
+              Loading player…
+            </p>
+          </div>
+        )}
         <iframe
           key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
           src={url}
           onError={autoAdvance}
-          className="aspect-video w-full"
+          onLoad={() => setLoaded(true)}
+          className="relative z-0 aspect-video w-full"
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           allowFullScreen
           referrerPolicy="origin"
           sandbox={sandboxed ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
-          title={`${title} player`}
+          title={`${title} player${type === 'tv' ? `, season ${season} episode ${episode}` : ''}`}
         />
       </div>
       {exhausted ? (
@@ -253,6 +320,7 @@ export default function Player({
             onClick={() => {
               triedRef.current = [server];
               setExhausted(false);
+              setLoaded(false);
               setKey((k) => k + 1);
             }}
             className="font-bold underline hover:text-amber-100"

@@ -2,6 +2,11 @@ export const TMDB_IMAGE = 'https://image.tmdb.org/t/p';
 const API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const TOKEN = process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN;
 
+const FETCH_TIMEOUT_MS = 12000;
+const MAX_ATTEMPTS = 4;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function tmdbFetch(path: string) {
   const url = `https://api.themoviedb.org/3${path}${path.includes('?') ? '&' : '?'}language=en-US`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -13,17 +18,31 @@ async function tmdbFetch(path: string) {
   } else {
     throw new Error('Missing NEXT_PUBLIC_TMDB_API_KEY or NEXT_PUBLIC_TMDB_ACCESS_TOKEN in .env.local');
   }
-  // Retry with backoff: TMDB resets TLS connections intermittently on some
-  // networks (ECONNRESET). TV pages make 2 calls, doubling the flake chance.
+  // Retry with exponential backoff + jitter: TMDB (or middleboxes/VPNs on
+  // some networks) intermittently reset TLS connections (ECONNRESET), and
+  // burst-parallel pages (/movies fires ~10 calls at once) multiply the
+  // odds. Each attempt also gets its own timeout so a hung socket can't
+  // stall the page, and 429s respect Retry-After instead of hammering.
   let lastErr: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(finalUrl, { headers, next: { revalidate: 3600 } });
+      const res = await fetch(finalUrl, {
+        headers,
+        next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (res.status === 429) {
+        const retryAfterSec = Number(res.headers.get('retry-after')) || 0;
+        lastErr = new Error(`TMDB rate limited (429) for ${path}`);
+        await sleep(Math.min(retryAfterSec ? retryAfterSec * 1000 : 1500 * (attempt + 1), 10000));
+        continue;
+      }
       if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
       return res.json();
     } catch (e) {
       lastErr = e;
-      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      // ~0.8s → 1.6s → 3.2s → 6.4s (+ jitter), so parallel bursts desync.
+      await sleep(800 * 2 ** attempt + Math.random() * 300);
     }
   }
   throw lastErr;
@@ -86,7 +105,7 @@ export const tmdb = {
 };
 
 export const poster = (path: string | null, size = 'w500') =>
-  path ? `${TMDB_IMAGE}/${size}${path}` : '/placeholder.png';
+  path ? `${TMDB_IMAGE}/${size}${path}` : '/placeholder.svg';
 
 // 18+ producers whose catalogs are mature by brand (verified Oct 2026).
 const ADULT_COMPANIES = new Set([149142, 173083, 134066]); // Vivamax, Vivamax Original Series, Ullu

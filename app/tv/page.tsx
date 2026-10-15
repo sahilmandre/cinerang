@@ -3,27 +3,24 @@ import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
 import LoadError from '@/components/LoadError';
 
+// One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
+// instead of failing the whole page.
+const empty = { results: [] as any[] };
+const quiet = (p: Promise<any>) => p.catch(() => empty);
+
 export default async function TVPage() {
-  let english: any,
-    hindi: any,
-    korean: any,
-    anime: any,
-    action: any,
-    crime: any,
-    mystery: any,
-    scifi: any;
-  try {
-    [english, hindi, korean, anime, action, crime, mystery, scifi] = await Promise.all([
-      tmdb.tvByLang('en'),
-      tmdb.tvByLang('hi'),
-      tmdb.tvByLang('ko'),
-      tmdb.anime(),
-      tmdb.genreTV(10759),
-      tmdb.genreTV(80),
-      tmdb.genreTV(9648),
-      tmdb.genreTV(10765),
-    ]);
-  } catch {
+  const [english, hindi, korean, anime, action, crime, mystery, scifi] = await Promise.all([
+    quiet(tmdb.tvByLang('en')),
+    quiet(tmdb.tvByLang('hi')),
+    quiet(tmdb.tvByLang('ko')),
+    quiet(tmdb.anime()),
+    quiet(tmdb.genreTV(10759)),
+    quiet(tmdb.genreTV(80)),
+    quiet(tmdb.genreTV(9648)),
+    quiet(tmdb.genreTV(10765)),
+  ]);
+  const sections = [english, hindi, korean, anime, action, crime, mystery, scifi];
+  if (sections.every((s) => !(s.results?.length))) {
     return <LoadError title="Could not load TV Series" retryHref="/tv" />;
   }
   return (
