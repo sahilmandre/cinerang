@@ -24,7 +24,7 @@ export default function ContinueWatching() {
     <section aria-labelledby={headingId} className="mt-8 scroll-mt-24 md:mt-9">
       <div className="mb-3 flex items-center gap-2.5">
         <span aria-hidden className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
-        <h2 id={headingId} className="text-base font-bold tracking-tight sm:text-lg">
+        <h2 id={headingId} className="text-base font-bold tracking-tight text-ink sm:text-lg">
           Continue watching
         </h2>
         <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/40">
