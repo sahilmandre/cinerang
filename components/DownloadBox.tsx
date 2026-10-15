@@ -117,17 +117,31 @@ export default function DownloadBox({
             {vv === null ? (
               <p className="mt-1.5 text-sm text-white/50">Checking converted qualities…</p>
             ) : vv.length ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {vv.map((q) => (
+              <>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {vv.map((q) => (
+                    <a
+                      key={q}
+                      href={vidvaultFileUrl(ctx, tmdbId, q)}
+                      className="inline-flex items-center gap-1 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-bold text-black transition hover:brightness-110"
+                    >
+                      <Download size={13} aria-hidden /> {q} .mkv
+                    </a>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-white/35">
+                  Button not starting?{' '}
                   <a
-                    key={q}
-                    href={vidvaultFileUrl(ctx, tmdbId, q)}
-                    className="inline-flex items-center gap-1 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-bold text-black transition hover:brightness-110"
+                    href={vidvaultPage(ctx, tmdbId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
                   >
-                    <Download size={13} aria-hidden /> {q} .mkv
-                  </a>
-                ))}
-              </div>
+                    Open VidVault page <ExternalLink size={11} aria-hidden />
+                  </a>{' '}
+                  and download from there instead.
+                </p>
+              </>
             ) : (
               <div className="mt-1.5 text-[13px] leading-relaxed text-white/60">
                 <p>Not converted yet for this {type === 'movie' ? 'movie' : 'episode'}. Open VidVault once to queue the conversion (takes seconds), then come back:</p>
