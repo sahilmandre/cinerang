@@ -12,9 +12,21 @@
 
 export type MediaType = 'movie' | 'tv';
 
+/** Ad experience: only set when the provider documents it — otherwise unknown. */
+export type AdLevel = 'none' | 'minimal' | 'unknown';
+
 export interface VideoServer {
   id: string;
   name: string;
+  /** Full-catalog embeds that also resolve explicit/adult TMDB ids. */
+  adultOk?: boolean;
+  /** Documented ad experience. Drives ad-free-first ordering + badges. */
+  ads?: AdLevel;
+  /**
+   * True when the player refuses sandboxed iframes and must load direct
+   * (verified for VidFast/VidLink) — popup-blocker can't apply to these.
+   */
+  noSandbox?: boolean;
   movieUrl: (tmdbId: string) => string;
   tvUrl: (tmdbId: string, season: number, episode: number) => string;
 }
@@ -24,19 +36,23 @@ export const SERVERS: VideoServer[] = [
     id: '2embed',
     name: '2Embed',
     movieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
-    tvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}?s=${s}&e=${e}`,
+    tvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,
   },
   {
     id: 'vidlink',
     name: 'VidLink',
+    // Refuses sandboxed iframes — loads direct, popup-blocker can't apply.
+    noSandbox: true,
     movieUrl: (id) => `https://vidlink.pro/movie/${id}`,
     tvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}`,
   },
   {
     id: 'vidfast',
     name: 'VidFast',
-    movieUrl: (id) => `https://vidfast.pro/movie/${id}`,
-    tvUrl: (id, s, e) => `https://vidfast.pro/tv/${id}/${s}/${e}`,
+    // Refuses sandboxed iframes — loads direct, popup-blocker can't apply.
+    noSandbox: true,
+    movieUrl: (id) => `https://vidfast.pro/movie/${id}?autoPlay=true`,
+    tvUrl: (id, s, e) => `https://vidfast.pro/tv/${id}/${s}/${e}?autoPlay=true`,
   },
   {
     // Per https://superembed.stream/#install — player domain is
@@ -66,11 +82,13 @@ export const SERVERS: VideoServer[] = [
   },
   {
     // Verified Oct 2026: HTTP 200 from PK, no bot challenge, documented at
-    // github.com/enikqi/yapgrid. Ad-free, 50+ UI languages, in-player
-    // subtitle translation — best pick for Hindi-speaking viewers
-    // (Hindi subtitles/UI, not dubbed audio).
+    // github.com/enikqi/yapgrid. 50+ UI languages, in-player subtitle
+    // translation. Ad-free player. Refuses sandboxed frames (user-tested)
+    // — loads direct, popup-blocker can't apply.
     id: 'yapgrid',
     name: 'YapGrid',
+    ads: 'none',
+    noSandbox: true,
     movieUrl: (id) => `https://yapgrid.com/embed/movie/${id}`,
     tvUrl: (id, s, e) => `https://yapgrid.com/embed/tv/${id}/${s}/${e}`,
   },
@@ -91,7 +109,74 @@ export const SERVERS: VideoServer[] = [
     movieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
     tvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
   },
+  {
+    // V2 embed, same TMDB-id model with a wide catalog including
+    // adult titles. Verified Oct 2026 via DNS-over-HTTPS: resolves
+    // (Cloudflare). Default player for 18+ titles.
+    // NOTE: embed.su was removed — its domain is parked (no DNS
+    // records) as of Oct 2026. Re-add if it returns.
+    id: 'vidsrc-cc',
+    name: 'VidSrc.cc',
+    adultOk: true,
+    movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`,
+  },
+  {
+    // Docs: vidcore.org — "entirely ad-free" player, 4K + subs.
+    // Verified Oct 2026: domain resolves via DoH. Refuses sandboxed
+    // frames (user-tested) — loads direct, popup-blocker can't apply.
+    id: 'vidcore',
+    name: 'VidCore',
+    ads: 'none',
+    noSandbox: true,
+    movieUrl: (id) => `https://vidcore.org/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidcore.org/embed/tv/${id}/${s}/${e}`,
+  },
+  {
+    // Docs: vidzee.wtf — "minimal ads", 1080p/4K. Verified Oct 2026 via DoH.
+    id: 'vidzee',
+    name: 'VidZee',
+    ads: 'minimal',
+    movieUrl: (id) => `https://player.vidzee.wtf/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://player.vidzee.wtf/embed/tv/${id}/${s}/${e}`,
+  },
+  {
+    // Docs: api.vidzy.org — TMDB-keyed player. Verified Oct 2026 via DoH.
+    id: 'vidzy',
+    name: 'Vidzy',
+    movieUrl: (id) => `https://vidzy.org/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidzy.org/serie/${id}/${s}/${e}`,
+  },
+  {
+    // Format verified via tmdb-embed-providers@0.1.1 (HTTP-probed live):
+    // vidsrc-family mirror with multi-language subtitle tracks.
+    id: 'vidsrc-pm',
+    name: 'VidSrc.pm',
+    movieUrl: (id) => `https://vidsrc.pm/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidsrc.pm/embed/tv/${id}/${s}/${e}`,
+  },
+  {
+    // Format verified via tmdb-embed-providers@0.1.1 (HTTP-probed live).
+    id: '2embed-skin',
+    name: '2Embed.skin',
+    movieUrl: (id) => `https://www.2embed.skin/embed/${id}`,
+    tvUrl: (id, s, e) => `https://www.2embed.skin/embedtv/${id}&s=${s}&e=${e}`,
+  },
 ];
+
+/** Default player for 18+ titles (full-catalog, adult-resolving). */
+export const ADULT_DEFAULT_SERVER = 'vidsrc-cc';
+
+/** Button order: adult-resolving servers first for 18+ titles, then
+ * ad-free/minimal-ad players first — no blind trial either way. */
+export function orderedServers(adult = false): VideoServer[] {
+  const rank = (s: VideoServer) => (s.ads === 'none' ? 2 : s.ads === 'minimal' ? 1 : 0);
+  if (!adult)
+    return [...SERVERS].sort((a, b) => rank(b) - rank(a));
+  return [...SERVERS].sort(
+    (a, b) => Number(b.adultOk ?? false) - Number(a.adultOk ?? false) || rank(b) - rank(a)
+  );
+}
 
 export function getEmbedUrl(
   serverId: string,
