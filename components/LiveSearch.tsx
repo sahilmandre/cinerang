@@ -97,6 +97,7 @@ export default function LiveSearch() {
           aria-controls={listId}
           aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
           autoComplete="off"
+          enterKeyHint="search"
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -120,8 +121,8 @@ export default function LiveSearch() {
               setHighlight((h) => Math.max(h - 1, -1));
             }
           }}
-          placeholder="Search movies, TV, anime…"
-          className="w-full rounded-xl border border-white/10 bg-card/80 py-2 pl-9 pr-9 text-sm outline-none backdrop-blur transition placeholder:text-white/30 focus:border-accent/70 focus:ring-2 focus:ring-accent/20"
+          placeholder="Search titles…"
+          className="w-full rounded-xl border border-white/10 bg-card/80 py-2.5 pl-9 pr-9 text-sm outline-none backdrop-blur transition placeholder:text-white/30 focus:border-accent/70 focus:ring-2 focus:ring-accent/20 lg:rounded-lg lg:py-1.5 lg:text-[13px]"
         />
         {loading && (
           <Loader2

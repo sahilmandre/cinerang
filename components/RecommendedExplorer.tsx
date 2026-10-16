@@ -1,0 +1,252 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Shuffle } from 'lucide-react';
+import RecommendationCard, {
+  type RecommendationItem,
+} from '@/components/RecommendationCard';
+import {
+  getTaste,
+  TASTE_EVENT,
+  type TasteKind,
+  type UserTaste,
+} from '@/lib/preferences';
+import { TMDB_MOVIE_GENRES, TMDB_TV_GENRES } from '@/lib/categories';
+import { cn, localDayKey } from '@/lib/utils';
+
+const MOVIE_NAMES = new Map(TMDB_MOVIE_GENRES.map((g) => [g.id, g.name]));
+const TV_NAMES = new Map(TMDB_TV_GENRES.map((g) => [g.id, g.name]));
+
+function serializeScores(scores: Record<string, number>): string {
+  return Object.entries(scores)
+    .filter(([, value]) => Number.isFinite(value) && value > 0)
+    .map(([key, value]) => `${key}:${Math.round(value * 100) / 100}`)
+    .join(',');
+}
+
+export default function RecommendedExplorer({ media }: { media: TasteKind }) {
+  const [items, setItems] = useState<RecommendationItem[]>([]);
+  const [taste, setTaste] = useState<UserTaste | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [shuffleKey, setShuffleKey] = useState(0);
+  const [genreFilter, setGenreFilter] = useState<number | null>(null);
+  const [originFilter, setOriginFilter] = useState<'all' | 'hi' | 'ko'>('all');
+
+  const isMovie = media === 'movie';
+  const names = isMovie ? MOVIE_NAMES : TV_NAMES;
+
+  const load = useCallback(() => {
+    const current = getTaste();
+    setTaste(current);
+    const params = new URLSearchParams();
+    const favorites = isMovie ? current.favoriteGenres : current.favoriteTvGenres;
+    const watched = isMovie ? current.watchedMovieIds : current.watchedTvIds;
+    const liked = isMovie ? current.likedMovieIds : current.likedTvIds;
+    const disliked = isMovie ? current.dislikedMovieIds : current.dislikedTvIds;
+    params.set('media', media);
+    if (favorites.length) params.set('favoriteGenres', favorites.join(','));
+    if (watched.length) params.set('watchedIds', watched.join(','));
+    if (liked.length) params.set('likedIds', liked.join(','));
+    if (disliked.length) params.set('dislikedIds', disliked.join(','));
+    const genreWeights = serializeScores(current.genreScores);
+    const languageScores = serializeScores(current.languageScores);
+    if (genreWeights) params.set('genreWeights', genreWeights);
+    if (languageScores) params.set('languageScores', languageScores);
+    params.set('limit', '48');
+    params.set('date', localDayKey());
+    params.set('shuffle', String(shuffleKey));
+
+    setLoading(true);
+    fetch(`/api/recommendations?${params.toString()}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => setItems(data.results ?? []))
+      .catch(() => {
+        /* keep old items on flaky network */
+      })
+      .finally(() => setLoading(false));
+  }, [media, isMovie, shuffleKey]);
+
+  useEffect(() => {
+    load();
+    window.addEventListener(TASTE_EVENT, load);
+    return () => window.removeEventListener(TASTE_EVENT, load);
+  }, [load]);
+
+  const removeItem = useCallback((id: number) => {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const favoriteChips = useMemo(() => {
+    if (!taste) return [];
+    const favorites = isMovie ? taste.favoriteGenres : taste.favoriteTvGenres;
+    return favorites
+      .filter((id, index) => favorites.indexOf(id) === index)
+      .slice(0, 10)
+      .map((id) => ({ id, name: names.get(id) ?? `Genre ${id}` }));
+  }, [taste, isMovie, names]);
+
+  const filtered = useMemo(
+    () =>
+      items.filter((item) => {
+        if (genreFilter != null && !(item.genre_ids ?? []).includes(genreFilter)) {
+          return false;
+        }
+        if (originFilter !== 'all' && item.original_language !== originFilter) {
+          return false;
+        }
+        return true;
+      }),
+    [items, genreFilter, originFilter]
+  );
+
+  return (
+    <div className="mt-6">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span
+          aria-hidden
+          className="h-6 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500"
+        />
+        <h1 className="text-2xl font-extrabold tracking-tight">
+          Recommended for you
+        </h1>
+        <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs tabular-nums text-white/40">
+          {filtered.length} of {items.length}
+        </span>
+        <button
+          type="button"
+          onClick={() => setShuffleKey((key) => key + 1)}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-accent"
+        >
+          <Shuffle size={12} aria-hidden />
+          Shuffle
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-white/40">
+        Fresh picks every calendar day. Like trains your taste, Dislike hides a
+        title, and Bookmark adds it to My Watchlist.
+      </p>
+
+      <div
+        role="tablist"
+        aria-label="Recommendation type"
+        className="mt-4 inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1 text-sm font-semibold"
+      >
+        <Link
+          role="tab"
+          aria-selected={isMovie}
+          href="/recommended"
+          className={cn(
+            'rounded-full px-5 py-2 transition',
+            isMovie ? 'bg-accent text-black shadow' : 'text-white/60 hover:text-white'
+          )}
+        >
+          Movies
+        </Link>
+        <Link
+          role="tab"
+          aria-selected={!isMovie}
+          href="/recommended/series"
+          className={cn(
+            'rounded-full px-5 py-2 transition',
+            !isMovie ? 'bg-accent text-black shadow' : 'text-white/60 hover:text-white'
+          )}
+        >
+          Series
+        </Link>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setGenreFilter(null)}
+          aria-pressed={genreFilter == null}
+          className={cn(
+            'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+            genreFilter == null
+              ? 'border-transparent bg-accent text-black'
+              : 'border-white/10 text-white/60 hover:border-accent/50 hover:text-accent'
+          )}
+        >
+          All matches
+        </button>
+        {favoriteChips.map((genre) => (
+          <button
+            key={genre.id}
+            type="button"
+            onClick={() => setGenreFilter(genre.id)}
+            aria-pressed={genreFilter === genre.id}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+              genreFilter === genre.id
+                ? 'border-transparent bg-accent text-black'
+                : 'border-white/10 text-white/60 hover:border-accent/50 hover:text-accent'
+            )}
+          >
+            {genre.name}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setOriginFilter(originFilter === 'hi' ? 'all' : 'hi')}
+          aria-pressed={originFilter === 'hi'}
+          className={cn(
+            'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+            originFilter === 'hi'
+              ? 'border-transparent bg-accent text-black'
+              : 'border-white/10 text-white/60 hover:border-accent/50 hover:text-accent'
+          )}
+        >
+          {isMovie ? 'Bollywood / Hindi' : 'Hindi series'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOriginFilter(originFilter === 'ko' ? 'all' : 'ko')}
+          aria-pressed={originFilter === 'ko'}
+          className={cn(
+            'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+            originFilter === 'ko'
+              ? 'border-transparent bg-accent text-black'
+              : 'border-white/10 text-white/60 hover:border-accent/50 hover:text-accent'
+          )}
+        >
+          {isMovie ? 'Korean movies' : 'K-dramas'}
+        </button>
+      </div>
+
+      {loading && items.length === 0 ? (
+        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i}>
+              <div className="shimmer aspect-[2/3] rounded-xl bg-white/5" />
+              <div className="shimmer mt-2 h-3 w-24 rounded bg-white/5" />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+          <p className="text-sm text-white/60">
+            No recommendations match these filters yet. Try another genre, clear
+            the origin filter, shuffle, or retake the{' '}
+            <Link href="/taste" className="text-accent hover:underline">
+              taste quiz
+            </Link>
+            .
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+          {filtered.map((item) => (
+            <RecommendationCard
+              key={`${media}-${item.id}`}
+              media={media}
+              item={item}
+              className="w-full"
+              onFeedback={removeItem}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

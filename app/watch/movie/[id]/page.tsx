@@ -6,6 +6,7 @@ import { genreSlug } from '@/lib/categories';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import Player from '@/components/Player';
 import DownloadBox from '@/components/DownloadBox';
+import WatchlistButton from '@/components/WatchlistButton';
 import Row from '@/components/Row';
 import LoadError from '@/components/LoadError';
 import { Star, Clock, Calendar, Play } from 'lucide-react';
@@ -112,6 +113,14 @@ export default async function WatchMovie({ params }: { params: { id: string } })
             })}
           </div>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/75">{d.overview}</p>
+          <div className="mt-4">
+            <WatchlistButton
+              id={Number(params.id)}
+              mediaType="movie"
+              title={d.title}
+              poster={d.poster_path ?? null}
+            />
+          </div>
           {trailer && (
             <a
               href={`https://www.youtube.com/watch?v=${trailer.key}`}

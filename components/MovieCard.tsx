@@ -14,6 +14,8 @@ export interface TMDBItem {
   media_type?: string;
   vote_average?: number;
   adult?: boolean;
+  genre_ids?: number[];
+  release_date?: string;
 }
 
 export function mediaTypeOf(item: TMDBItem, fallback: 'movie' | 'tv' = 'movie') {
@@ -27,12 +29,18 @@ export default function MovieCard({
   forceType,
   fluid = false,
   markAdult = false,
+  matchScore,
+  matchReason,
 }: {
   item: TMDBItem;
   forceType?: 'movie' | 'tv';
   fluid?: boolean;
   /** Force the 18+ badge — used in gated 18+ sections where every title is mature by curation. */
   markAdult?: boolean;
+  /** Optional "Match X%" badge shown on recommendations rows. */
+  matchScore?: number;
+  /** Optional reason text shown under the title on recommendations rows. */
+  matchReason?: string;
 }) {
   const type = forceType ?? mediaTypeOf(item);
   const title = item.title ?? item.name ?? 'Unknown';
@@ -57,8 +65,14 @@ export default function MovieCard({
           sizes="(max-width: 640px) 136px, (max-width: 768px) 148px, 160px"
           className="aspect-[2/3] w-full object-cover transition duration-500 group-hover:scale-105 group-focus-visible:scale-105"
         />
-        {item.vote_average ? (
+        {item.vote_average && matchScore == null ? (
           <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold backdrop-blur">
+            <Star size={10} aria-hidden className="fill-amber-400 text-amber-400" />
+            {item.vote_average.toFixed(1)}
+          </span>
+        ) : null}
+        {item.vote_average && matchScore != null ? (
+          <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold backdrop-blur">
             <Star size={10} aria-hidden className="fill-amber-400 text-amber-400" />
             {item.vote_average.toFixed(1)}
           </span>
@@ -83,7 +97,19 @@ export default function MovieCard({
       </div>
       <div className="p-2">
         <p className="truncate text-[13px] font-semibold">{title}</p>
-        <p className="mt-0.5 text-[11px] uppercase tracking-wide text-white/35">{type}</p>
+        <div className="mt-0.5 flex items-center justify-between gap-1.5">
+          <p className="text-[11px] uppercase tracking-wide text-white/35">{type}</p>
+          {matchScore != null && (
+            <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-black">
+              {Math.round(matchScore)}% match
+            </span>
+          )}
+        </div>
+        {matchReason && (
+          <p className="mt-1 text-[10px] uppercase tracking-wider text-accent/80 leading-tight">
+            Because you like {matchReason}
+          </p>
+        )}
       </div>
     </Link>
   );

@@ -2,6 +2,7 @@ import { tmdb } from '@/lib/tmdb';
 import Hero from '@/components/Hero';
 import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
+import RecommendedRow from '@/components/RecommendedRow';
 import LoadError from '@/components/LoadError';
 
 // One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
@@ -46,6 +47,8 @@ export default async function Home() {
   return (
     <div>
       <Hero items={data.results ?? []} />
+      <RecommendedRow media="movie" title="Recommended movies" viewAllHref="/recommended" />
+      <RecommendedRow media="tv" title="Recommended series" viewAllHref="/recommended/series" />
       <ContinueWatching />
       <Row title="Trending now" items={data.results ?? []} href="/browse/trending" />
       <Row title="Popular movies" items={movies.results ?? []} type="movie" href="/browse/popular-movies" />

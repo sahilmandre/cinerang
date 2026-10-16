@@ -11,6 +11,9 @@ export interface ContinueItem {
 const KEY_CONTINUE = 'cinejoy.continue';
 const KEY_LIST = 'cinejoy.watchlist';
 
+/** Fired on window whenever the watchlist changes. */
+export const WATCHLIST_EVENT = 'cinerang:watchlist-updated';
+
 export function getContinue(): ContinueItem[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -43,19 +46,30 @@ export function clearContinue() {
 export function getWatchlist(): ContinueItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY_LIST) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(KEY_LIST) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is ContinueItem =>
+        Boolean(item) &&
+        Number.isInteger(item.id) &&
+        item.id > 0 &&
+        (item.mediaType === 'movie' || item.mediaType === 'tv') &&
+        typeof item.title === 'string'
+    );
   } catch {
     return [];
   }
 }
 
-export function toggleWatchlist(item: ContinueItem): boolean {
+export function toggleWatchlist(item: Omit<ContinueItem, 'updatedAt'>): boolean {
+  if (typeof window === 'undefined') return false;
   const list = getWatchlist();
   const exists = list.some((x) => x.id === item.id && x.mediaType === item.mediaType);
   const next = exists
     ? list.filter((x) => !(x.id === item.id && x.mediaType === item.mediaType))
     : [{ ...item, updatedAt: Date.now() }, ...list];
   localStorage.setItem(KEY_LIST, JSON.stringify(next));
+  window.dispatchEvent(new Event(WATCHLIST_EVENT));
   return !exists;
 }
 
