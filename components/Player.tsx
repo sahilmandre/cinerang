@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { RotateCcw, ShieldCheck, ShieldOff, SquareArrowOutUpRight } from 'lucide-react';
+import { Play, RotateCcw, ShieldCheck, ShieldOff, SquareArrowOutUpRight } from 'lucide-react';
 import { SERVERS, getEmbedUrl, MediaType, ADULT_DEFAULT_SERVER, orderedServers } from '@/lib/servers';
 import { saveContinue } from '@/lib/storage';
 import { cn } from '@/lib/utils';
@@ -44,13 +44,13 @@ export default function Player({
   const recommended = adult ? (defaultServer ?? ADULT_DEFAULT_SERVER) : null;
   // Popup-blocker: sandboxed frame kills popups + tab-hijacks while
   // keeping scripts/storage alive. Cross-origin players can't escape it.
-  // Defaults on; VidFast/VidLink refuse sandboxed frames and load direct.
-  const [blocker, setBlocker] = useState(true);
+  // Defaults off; VidFast/VidLink refuse sandboxed frames and load direct.
+  const [blocker, setBlocker] = useState(false);
   useEffect(() => {
     try {
-      if (localStorage.getItem('cinerang.popup_block') === '0') setBlocker(false);
+      if (localStorage.getItem('cinerang.popup_block') === '1') setBlocker(true);
     } catch {
-      /* stay protected */
+      /* stay unblocked */
     }
   }, []);
   const toggleBlocker = () => {
@@ -70,6 +70,7 @@ export default function Player({
   const [seasonDraft, setSeasonDraft] = useState(String(initialSeason));
   const [episodeDraft, setEpisodeDraft] = useState(String(initialEpisode));
   const [key, setKey] = useState(0);
+  const [shield, setShield] = useState(true);
   const [loaded, setLoaded] = useState(false);
   // Mirror of `loaded` for timeout callbacks — setState updaters must stay
   // pure (StrictMode double-invokes them), so async checks read the ref.
@@ -120,6 +121,13 @@ export default function Player({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server, episodeKey, key]);
+
+  // Ad-click shield: covers direct (unsandboxed) frames so the first click
+  // — the one most likely to call window.open() — hits our button, not the
+  // 3rd-party player. Re-armed on every server/episode/reload/blocker change.
+  useEffect(() => {
+    setShield(true);
+  }, [server, episodeKey, key, sandboxed]);
 
   const url = getEmbedUrl(server, type, tmdbId, season, episode);
 
@@ -271,6 +279,11 @@ export default function Player({
           >
             {s.id === recommended ? '★ ' : null}
             {s.name}
+            {s.hindi ? (
+              <span className="ml-1.5 rounded bg-sky-500/20 px-1 py-px text-[10px] font-extrabold text-sky-300">
+                Hindi
+              </span>
+            ) : null}
             {s.ads === 'none' ? (
               <span className="ml-1.5 rounded bg-emerald-500/20 px-1 py-px text-[10px] font-extrabold text-emerald-300">
                 Ad-free
@@ -300,7 +313,7 @@ export default function Player({
         <button
           onClick={toggleBlocker}
           aria-pressed={blocker}
-          title="Sandboxed frame blocks popups and tab-hijacks. Turn off if a player refuses to load inside it."
+          title="Sandboxed frame blocks popups and tab-hijacks. Turn on for blocking; turn off if a player refuses to load inside it."
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition',
             blocker
@@ -396,6 +409,33 @@ export default function Player({
           sandbox={sandboxed ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
           title={`${title} player${type === 'tv' ? `, season ${season} episode ${episode}` : ''}`}
         />
+        {!sandboxed && shield && !exhausted && (
+          <button
+            type="button"
+            onClick={() => setShield(false)}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 p-4 text-center transition hover:bg-black/70"
+            aria-label="Start playback — blocks the first ad popup click"
+          >
+            <span className="grid h-16 w-16 place-items-center rounded-full bg-accent text-black shadow-lg shadow-accent/30 transition hover:scale-105">
+              <Play size={26} aria-hidden className="ml-1 fill-black" />
+            </span>
+            <span className="text-sm font-bold text-white">Click to play</span>
+            <span className="max-w-md text-xs leading-relaxed text-white/60">
+              {current?.name} plays direct, so the popup-blocker can&apos;t apply.
+              This cover absorbs the first click that usually opens an ad tab.
+            </span>
+          </button>
+        )}
+        {!sandboxed && !shield && !exhausted && (
+          <button
+            type="button"
+            onClick={() => setShield(true)}
+            title="Re-cover the player — use this if controls start opening ad tabs again"
+            className="absolute right-2 top-2 z-20 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[11px] font-bold text-white/80 backdrop-blur transition hover:bg-black/90 hover:text-white"
+          >
+            <ShieldCheck size={12} aria-hidden /> Ad shield
+          </button>
+        )}
       </div>
       {exhausted ? (
         <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-200">

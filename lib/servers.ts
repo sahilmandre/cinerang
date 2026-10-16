@@ -27,6 +27,8 @@ export interface VideoServer {
    * (verified for VidFast/VidLink) — popup-blocker can't apply to these.
    */
   noSandbox?: boolean;
+  /** True when the player offers Hindi-dubbed audio (e.g. Screenscape lan=hindi). */
+  hindi?: boolean;
   movieUrl: (tmdbId: string) => string;
   tvUrl: (tmdbId: string, season: number, episode: number) => string;
 }
@@ -77,6 +79,7 @@ export const SERVERS: VideoServer[] = [
     // Verified Oct 2026: HTTP 200 for movie + TV embeds from PK+VPN.
     id: 'screenscape',
     name: 'Screenscape',
+    hindi: true,
     movieUrl: (id) => `https://nxsha.screenscape.me/embed?tmdb=${id}&type=movie&lan=hindi`,
     tvUrl: (id, s, e) => `https://nxsha.screenscape.me/embed?tmdb=${id}&type=tv&s=${s}&e=${e}&lan=hindi`,
   },
