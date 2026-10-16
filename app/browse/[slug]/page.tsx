@@ -112,7 +112,7 @@ export default async function BrowsePage({
   const pageLink = (p: number) => `/browse/${params.slug}?page=${p}`;
   const neighbours = [page - 2, page - 1, page, page + 1, page + 2].filter((p) => p >= 1 && p <= totalPages);
 
-  return (
+  const content = (
     <div className="mt-6">
       <div className="flex flex-wrap items-center gap-2.5">
         <span
@@ -181,6 +181,9 @@ export default async function BrowsePage({
       )}
     </div>
   );
+
+  if (cat.adultOnly) return <AdultGate>{content}</AdultGate>;
+  return content;
 }
 
 function BrowseGrid({
@@ -192,7 +195,7 @@ function BrowseGrid({
   type?: 'movie' | 'tv';
   adultOnly?: boolean;
 }) {
-  const grid = (
+  return (
     <div className="cv-auto mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
       {items
         .filter((m) => m.poster_path)
@@ -201,6 +204,4 @@ function BrowseGrid({
         ))}
     </div>
   );
-  if (adultOnly) return <AdultGate>{grid}</AdultGate>;
-  return grid;
 }

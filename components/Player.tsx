@@ -62,7 +62,9 @@ export default function Player({
       }
       return !b;
     });
-    setKey((k) => k + 1);
+    // No setKey here: toggling the blocker only changes the sandbox attr,
+    // which is derived from `blocker` + `current.noSandbox` at render.
+    // Remounting the iframe on every toggle wastes a full player reload.
   };
   const [server, setServer] = useState(fallback);
   const [season, setSeason] = useState(initialSeason);

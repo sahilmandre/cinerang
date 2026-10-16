@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Search, Film, Tv } from 'lucide-react';
@@ -164,13 +165,14 @@ export default function LiveSearch() {
                           i === highlight ? 'bg-white/10' : 'hover:bg-white/5'
                         )}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={poster(r.poster_path, 'w92')}
                           alt=""
                           aria-hidden
-                          className="h-12 w-8 shrink-0 rounded bg-white/5 object-cover"
+                          width={92}
+                          height={138}
                           loading="lazy"
+                          className="h-12 w-8 shrink-0 rounded bg-white/5 object-cover"
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{title}</p>
