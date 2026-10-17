@@ -44,6 +44,8 @@ export interface UserProfile {
 export interface ScoredTitle extends CandidateTitle {
   score: number;
   reasons: string[];
+  /** True when the user already liked this title — it stays in the list. */
+  liked?: boolean;
 }
 
 const GENRE_POINTS = 55;
@@ -68,6 +70,15 @@ interface GenreAffinity {
   weights: Map<number, number>;
 }
 
+/**
+ * Blended recall × precision genre affinity.
+ *
+ * Recall (matched weight / total weight) alone reads 1.0 for a title that
+ * tags three liked genres AND three unliked ones — genre-stuffed titles
+ * scored as perfect matches. Blending with precision (matched / all of the
+ * title's genres) downweights stuffed entries while keeping genuinely
+ * on-genre titles at 1.0.
+ */
 function genreAffinity(
   profile: UserProfile,
   titleGenres: number[]
@@ -103,7 +114,8 @@ function genreAffinity(
 
   const matched: number[] = [];
   let matchedWeight = 0;
-  for (const genreId of Array.from(new Set(titleGenres.map(cleanGenreId)))) {
+  const uniqueGenres = Array.from(new Set(titleGenres.map(cleanGenreId)));
+  for (const genreId of uniqueGenres) {
     if (genreId == null) continue;
     const weight = weights.get(genreId) ?? 0;
     if (weight > 0) {
@@ -112,8 +124,11 @@ function genreAffinity(
     }
   }
 
+  const recall = totalWeight > 0 ? matchedWeight / totalWeight : 0;
+  const precision = uniqueGenres.length > 0 ? matched.length / uniqueGenres.length : 0;
+
   return {
-    affinity: totalWeight > 0 ? matchedWeight / totalWeight : 0,
+    affinity: 0.7 * recall + 0.3 * precision,
     matched,
     weights,
   };
@@ -199,10 +214,12 @@ export function scoreTitles(
     .filter(
       (title) =>
         !watchedSet.has(title.id) &&
-        !likedSet.has(title.id) &&
         !dislikedSet.has(title.id)
+      // Liked titles intentionally stay: a like must not make a title
+      // vanish from the list, it only trains the taste profile.
     )
     .map((title): ScoredTitle => {
+      const isLiked = likedSet.has(title.id);
       const { affinity, matched, weights } = genreAffinity(
         profile,
         title.genre_ids
@@ -220,6 +237,8 @@ export function scoreTitles(
         languageMatch * (hasLanguageProfile ? LANGUAGE_POINTS : 0);
 
       const reasons: string[] = [];
+      if (isLiked) reasons.push('You liked this');
+
       const languageLabel = languageReason(title.original_language, media);
       if (hasLanguageProfile && languageMatch >= 0.35 && languageLabel) {
         reasons.push(languageLabel);
@@ -239,6 +258,7 @@ export function scoreTitles(
         media_type: title.media_type ?? media,
         score: Math.round((earned / possible) * 100 * 100) / 100,
         reasons,
+        liked: isLiked,
       };
     })
     .sort(
@@ -247,6 +267,51 @@ export function scoreTitles(
         (b.vote_average ?? 0) - (a.vote_average ?? 0) ||
         (b.popularity ?? 0) - (a.popularity ?? 0)
     );
+}
+
+/**
+ * Diversity pass — caps how many top results may share the same primary
+ * genre so a single red-hot genre doesn't monopolize the whole row. Titles
+ * beyond the cap are held back and appended after the first pass (order
+ * preserved), so the list is still ranked, just varied.
+ */
+export function diversifyTitles(
+  scored: ScoredTitle[],
+  limit: number,
+  weights?: Map<number, number>
+): ScoredTitle[] {
+  const maxPerGenre = Math.max(2, Math.ceil(limit / 6));
+  const genreCount = new Map<number, number>();
+  const kept: ScoredTitle[] = [];
+  const held: ScoredTitle[] = [];
+
+  for (const title of scored) {
+    // Primary genre = the highest-weighted matched genre, else the first tag.
+    const primary =
+      title.genre_ids
+        .filter((id) => !weights || weights.has(id))
+        .sort(
+          (a, b) => (weights?.get(b) ?? 0) - (weights?.get(a) ?? 0) || a - b
+        )[0] ?? title.genre_ids[0];
+    if (primary == null) {
+      kept.push(title);
+      continue;
+    }
+    const count = genreCount.get(primary) ?? 0;
+    if (kept.length < limit && count < maxPerGenre) {
+      genreCount.set(primary, count + 1);
+      kept.push(title);
+    } else {
+      held.push(title);
+    }
+  }
+
+  // Fill any shortfall from the held-back titles in rank order.
+  for (const title of held) {
+    if (kept.length >= limit) break;
+    kept.push(title);
+  }
+  return kept.slice(0, limit);
 }
 
 /** Backwards-compatible alias while callers migrate to scoreTitles. */

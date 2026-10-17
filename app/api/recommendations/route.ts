@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { tmdb } from '@/lib/tmdb';
 import {
   scoreTitles,
+  diversifyTitles,
   CandidateTitle,
   RecommendationMedia,
 } from '@/lib/recommendations';
@@ -183,25 +184,34 @@ export async function GET(req: Request) {
       languageScores,
       random
     );
+    const profile = {
+      favoriteGenres,
+      watchedIds,
+      likedIds,
+      dislikedIds,
+      genreWeights,
+      languageScores,
+    };
     const scored = scoreTitles(
       candidates,
-      {
-        favoriteGenres,
-        watchedIds,
-        likedIds,
-        dislikedIds,
-        genreWeights,
-        languageScores,
-      },
+      profile,
       media === 'movie' ? MOVIE_LOOKUP : TV_LOOKUP,
       media
     );
+    // Genre weights drive the primary-genre choice in the diversity pass.
+    const weights = new Map(
+      Object.entries(genreWeights).map(([k, v]) => [Number(k), v])
+    );
+    for (const id of favoriteGenres) {
+      if (!weights.has(id)) weights.set(id, 1);
+    }
+    const diversified = diversifyTitles(scored, limit, weights);
     return NextResponse.json({
       media,
       day,
       shuffle,
       count: Math.min(scored.length, limit),
-      results: scored.slice(0, limit),
+      results: diversified,
     });
   } catch {
     return NextResponse.json({

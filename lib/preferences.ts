@@ -209,16 +209,33 @@ export function recordTitleLiked(input: {
 
 /**
  * Dislikes a recommended title. It is hidden from later recommendations and
- * removed from likes if it was previously liked.
+ * removed from likes if it was previously liked. The title's genres are also
+ * gently dampened (−0.5 pick frequency each, never below zero) so repeated
+ * dislikes can neutralize an over-eager genre without hard-deleting the
+ * user's explicit quiz selections.
  */
-export function recordTitleDisliked(id: number, kind: TasteKind): UserTaste {
+export function recordTitleDisliked(
+  id: number,
+  kind: TasteKind,
+  genreIds: number[] = []
+): UserTaste {
   const current = getTaste();
   const likedKey = kind === 'movie' ? 'likedMovieIds' : 'likedTvIds';
   const dislikedKey =
     kind === 'movie' ? 'dislikedMovieIds' : 'dislikedTvIds';
+
+  const nextGenreScores = { ...current.genreScores };
+  for (const genreId of cleanIds(genreIds)) {
+    const key = String(genreId);
+    const next = (nextGenreScores[key] ?? 0) - 0.5;
+    if (next > 0) nextGenreScores[key] = next;
+    else delete nextGenreScores[key];
+  }
+
   return saveTaste({
     [likedKey]: current[likedKey].filter((titleId) => titleId !== id),
     [dislikedKey]: Array.from(new Set([...current[dislikedKey], id])),
+    genreScores: nextGenreScores,
   } as Partial<UserTaste>);
 }
 

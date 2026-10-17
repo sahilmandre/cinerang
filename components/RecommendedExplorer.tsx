@@ -73,9 +73,16 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
     return () => window.removeEventListener(TASTE_EVENT, load);
   }, [load]);
 
-  const removeItem = useCallback((id: number) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-  }, []);
+  // Dislike removes the card immediately. Likes keep it — a like only
+  // trains the profile, the title must not vanish from the list.
+  const handleFeedback = useCallback(
+    (id: number, feedback: 'like' | 'dislike') => {
+      if (feedback === 'dislike') {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+      }
+    },
+    []
+  );
 
   const favoriteChips = useMemo(() => {
     if (!taste) return [];
@@ -238,7 +245,7 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
               media={media}
               item={item}
               className="w-full"
-              onFeedback={removeItem}
+              onFeedback={handleFeedback}
             />
           ))}
         </div>

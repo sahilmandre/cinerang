@@ -82,7 +82,7 @@ export default function RecommendationCard({
   };
 
   const dislike = () => {
-    recordTitleDisliked(item.id, media);
+    recordTitleDisliked(item.id, media, item.genre_ids ?? []);
     setDisliked(true);
     setLiked(false);
     onFeedback?.(item.id, 'dislike');
