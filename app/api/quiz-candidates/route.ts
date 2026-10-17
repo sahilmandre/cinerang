@@ -12,7 +12,7 @@ import { tmdb } from '@/lib/tmdb';
  *
  * Each response mixes up to 4 shuffled genre pools, mainstream popularity,
  * and regional Bollywood/Hindi plus Korean pools. Round-robin selection keeps
- * one genre or region from dominating a 3-title round.
+ * one genre or region from dominating a round.
  * Runs server-side so the TMDB key never reaches the browser.
  */
 
@@ -72,10 +72,10 @@ export async function GET(req: Request) {
   // Draw from up to 4 genres, shuffled so every selected genre gets a turn
   // across quiz rounds instead of always favoring the first picks.
   const drawGenres = shuffle(genreIds).slice(0, 4);
-  // Random pages per pool (1–3): a 20-round quiz shows ~60 titles, so late
+  // Random pages per pool (1–5): a 20-round quiz shows ~100 titles, so late
   // rounds need fresh candidates — page 1 alone would run dry. Repeated pages
   // are served from the TMDB fetch cache, so this stays cheap.
-  const randomPage = () => 1 + Math.floor(Math.random() * 3);
+  const randomPage = () => 1 + Math.floor(Math.random() * 5);
 
   const genrePools =
     media === 'movie'

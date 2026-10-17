@@ -31,11 +31,15 @@ type QuizStep = 'welcome' | 'genres' | 'titles' | 'done';
 /** How many title-choice rounds the quiz runs. More rounds → richer profile. */
 const TOTAL_ROUNDS = 20;
 
-/** Max titles the user can pick in a single round (they may love 2 of 3). */
+/** Max titles the user can pick in a single round (they may love 2 of 5). */
 const MAX_PICKS = 2;
 
-/** How many candidates come back per round. */
-const ROUND_SIZE = 3;
+/**
+ * How many candidates come back per round. Sized to fill one full row at
+ * every breakpoint (2-up mobile / 3-up tablet / 5-up desktop) so no screen
+ * space is left empty on the right.
+ */
+const ROUND_SIZE = 5;
 
 // Genres mixed into later rounds for discovery so the profile keeps growing
 // even when the user started with only a couple of genres.
@@ -261,6 +265,17 @@ export default function TasteQuiz() {
 
   const genreOptions =
     kind === 'movie' ? TMDB_MOVIE_GENRES : TMDB_TV_GENRES;
+  const genreById = new Map(genreOptions.map((g) => [g.id, g.name]));
+
+  const statusOf = (rating: number | undefined) => {
+    if (rating == null) return null;
+    if (rating >= 7.5)
+      return { label: 'Hit', cls: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' };
+    if (rating >= 5.5)
+      return { label: 'Average', cls: 'text-amber-400 border-amber-500/30 bg-amber-500/10' };
+    return { label: 'Flop', cls: 'text-red-400 border-red-500/30 bg-red-500/10' };
+  };
+
   const kindNoun = kind === 'movie' ? 'movie' : 'series';
   const kindPlural = kind === 'movie' ? 'movies' : 'series';
   const recommendedHref =
@@ -459,9 +474,12 @@ export default function TasteQuiz() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex flex-col items-center gap-3">
+        <div className="flex flex-wrap justify-center gap-4">
+          {Array.from({ length: ROUND_SIZE }).map((_, i) => (
+            <div
+              key={i}
+              className="flex w-[calc(50%-10px)] min-w-0 flex-col items-center gap-3 sm:w-[calc(33.333%-12px)] lg:w-[calc(20%-14px)]"
+            >
               <div className="shimmer aspect-[2/3] w-full rounded-2xl bg-white/5" />
               <div className="shimmer h-4 w-32 rounded bg-white/5" />
             </div>
@@ -488,11 +506,19 @@ export default function TasteQuiz() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="flex flex-wrap justify-center gap-4">
           {currentTitles.map((m) => {
             const picked = pickedIds.includes(m.id);
             const blocked = !picked && pickedIds.length >= MAX_PICKS;
             const badge = originBadge(m);
+            const status = statusOf(m.vote_average);
+            const year = m.release_date
+              ? new Date(m.release_date).getFullYear()
+              : null;
+            const genres = m.genre_ids
+              .slice(0, 2)
+              .map((gid) => genreById.get(gid))
+              .filter(Boolean);
             return (
               <button
                 key={m.id}
@@ -502,7 +528,7 @@ export default function TasteQuiz() {
                 aria-pressed={picked}
                 aria-label={`${picked ? 'Unpick' : 'Pick'} ${m.title}`}
                 className={cn(
-                  'group block w-full overflow-hidden rounded-2xl border bg-card shadow-card transition',
+                  'group block w-[calc(50%-10px)] min-w-0 overflow-hidden rounded-2xl border bg-card shadow-card transition sm:w-[calc(33.333%-12px)] lg:w-[calc(20%-14px)]',
                   picked
                     ? 'border-accent shadow-lg shadow-accent/20 ring-2 ring-accent/60'
                     : 'border-white/10 hover:border-accent/50 hover:shadow-glow',
@@ -513,10 +539,10 @@ export default function TasteQuiz() {
                   <Image
                     src={poster(m.poster_path, 'w500')}
                     alt={m.title}
-                    width={500}
-                    height={750}
+                    width={360}
+                    height={540}
                     loading="lazy"
-                    sizes="(max-width: 640px) 100vw, 33vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                   />
                   {picked ? (
@@ -556,9 +582,38 @@ export default function TasteQuiz() {
                     </span>
                   ) : null}
                 </div>
-                <p className="w-full truncate p-2.5 text-center text-sm font-semibold">
-                  {m.title}
-                </p>
+                <div className="p-2">
+                  <p className="w-full truncate text-center text-sm font-semibold">
+                    {m.title}
+                  </p>
+                  <div className="mt-1 flex flex-wrap justify-center gap-1.5">
+                    {year ? (
+                      <span
+                        className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70"
+                      >
+                        {year}
+                      </span>
+                    ) : null}
+                    {genres.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                    {status ? (
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold',
+                          status.cls
+                        )}
+                      >
+                        {status.label}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
               </button>
             );
           })}
