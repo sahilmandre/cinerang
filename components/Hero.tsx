@@ -1,81 +1,174 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Play, Star } from 'lucide-react';
 import { poster } from '@/lib/tmdb';
 import { TMDBItem } from './MovieCard';
-import { Play, Star, TrendingUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
+const SLIDE_MS = 8000;
+
+/**
+ * Cinematic auto-rotating hero (Disney+/Hulu style). Backdrops crossfade
+ * with a slow ken-burns zoom; only the current and next images are ever
+ * mounted, so a visit downloads exactly one extra backdrop ahead of time.
+ */
 export default function Hero({ items }: { items: TMDBItem[] }) {
-  const top = items.slice(0, 5);
-  const [first, ...rest] = top;
-  if (!first) return null;
-  const title = first.title ?? first.name ?? '';
+  const top = items.filter((m) => m.backdrop_path ?? m.poster_path).slice(0, 5);
+  const n = top.length;
+  const [current, setCurrent] = useState(0);
+  const [mounted, setMounted] = useState<boolean[]>(() => top.map((_, i) => i < 2));
+  const [paused, setPaused] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const goTo = useCallback(
+    (i: number) => setCurrent(((i % n) + n) % n),
+    [n]
+  );
+
+  // Auto-advance — pauses on hover/focus and whenever the hero is offscreen
+  // or the tab is hidden, so timers never pile up in the background.
+  useEffect(() => {
+    if (paused || n < 2) return;
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (!heroRef.current || heroRef.current.checkVisibility?.() === false) return;
+      setCurrent((c) => (c + 1) % n);
+    }, SLIDE_MS);
+    return () => window.clearInterval(t);
+  }, [paused, n, current]);
+
+  // Preload exactly one slide ahead; seen slides stay mounted (already cached).
+  useEffect(() => {
+    const next = (current + 1) % n;
+    setMounted((m) => (m[next] ? m : m.map((v, i) => (i === next ? true : v))));
+  }, [current, n]);
+
+  if (!n) return null;
+  const active = top[current];
+  const title = active.title ?? active.name ?? '';
+  const year = (active.release_date ?? active.first_air_date ?? '').slice(0, 4);
+  const type = active.media_type === 'tv' ? 'Series' : 'Movie';
+
   return (
-    <div className="mt-4 grid gap-3 sm:gap-4 md:mt-5 md:grid-cols-3">
-      <Link
-        href={`/watch/${first.media_type === 'tv' ? 'tv' : 'movie'}/${first.id}`}
-        className="group relative block overflow-hidden rounded-2xl border border-white/10 shadow-card transition duration-300 hover:border-accent/40 md:col-span-2"
-        aria-label={`Watch ${title} now`}
-      >
-        <Image
-          src={poster(first.backdrop_path ?? first.poster_path, 'w1280')}
-          alt=""
-          aria-hidden
-          width={1280}
-          height={720}
-          priority
-          sizes="(max-width: 768px) 100vw, 66vw"
-          className="h-[260px] w-full object-cover transition duration-500 group-hover:scale-[1.03] sm:h-[300px] md:h-[400px]"
-        />
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/5" />
-        <div className="absolute inset-x-0 top-3 flex items-start justify-between px-3 sm:top-4 sm:px-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-bold text-black shadow-lg">
-            <TrendingUp size={12} aria-hidden /> #1 Trending
-          </span>
-          {first.vote_average ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold backdrop-blur">
-              <Star size={12} aria-hidden className="fill-amber-400 text-amber-400" />
-              {first.vote_average.toFixed(1)}
-            </span>
-          ) : null}
-        </div>
-        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 md:p-6">
-          <h1 className="max-w-2xl text-balance text-xl font-extrabold leading-tight tracking-tight drop-shadow-lg sm:text-2xl md:text-4xl">
-            {title}
-          </h1>
-          {first.overview ? (
-            <p className="mt-2 hidden max-w-xl text-sm leading-relaxed text-white/70 [display:-webkit-box] sm:line-clamp-2">
-              {first.overview}
-            </p>
-          ) : null}
-          <span className="mt-3 inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-black shadow-lg shadow-accent/30 transition group-hover:shadow-glow sm:px-5 sm:py-2.5">
-            <Play size={16} aria-hidden className="fill-black" /> Watch now
-          </span>
-        </div>
-      </Link>
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-1">
-        {rest.slice(0, 2).map((m, i) => (
-          <Link
+    <div
+      ref={heroRef}
+      className="relative -mx-4 h-[68vh] min-h-[460px] max-h-[620px] overflow-hidden bg-card sm:mx-0 sm:h-[64vh] sm:min-h-[500px] sm:rounded-[28px]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Trending now"
+    >
+      {/* Crossfading backdrops with slow ken-burns drift */}
+      {top.map((m, i) =>
+        mounted[i] ? (
+          <div
             key={m.id}
-            href={`/watch/${m.media_type === 'tv' ? 'tv' : 'movie'}/${m.id}`}
-            className="group relative block overflow-hidden rounded-2xl border border-white/10 transition duration-300 hover:border-accent/40"
-            aria-label={`Watch ${m.title ?? m.name}`}
+            aria-hidden
+            className={cn(
+              'absolute inset-0 transition-opacity duration-[1200ms] ease-out motion-reduce:transition-none',
+              i === current ? 'opacity-100' : 'opacity-0'
+            )}
           >
             <Image
-              src={poster(m.backdrop_path ?? m.poster_path, 'w780')}
+              src={poster(m.backdrop_path ?? m.poster_path, 'w1280')}
               alt=""
-              aria-hidden
-              width={780}
-              height={440}
-              loading="lazy"
-              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
-              className="h-[140px] w-full object-cover transition duration-500 group-hover:scale-[1.04] sm:h-[150px] md:h-[192px]"
+              width={1280}
+              height={720}
+              priority={i === 0}
+              loading={i === 0 ? undefined : 'lazy'}
+              sizes="100vw"
+              className={cn(
+                'h-full w-full object-cover',
+                i === current && 'animate-hero-zoom motion-reduce:animate-none'
+              )}
             />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-            <p className="absolute inset-x-3 bottom-3 truncate text-sm font-semibold drop-shadow sm:text-[15px]">
-              <span className="mr-2 text-xs font-bold text-accent">#{i + 2}</span>
-              {m.title ?? m.name}
+          </div>
+        ) : null
+      )}
+
+      {/* Legibility scrims */}
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#0a0e0a] via-[#0a0e0a]/35 to-transparent" />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#0a0e0a]/85 via-[#0a0e0a]/25 to-transparent" />
+
+      {/* Slide content — re-keys per slide so text animates in */}
+      <div
+        key={active.id}
+        className="absolute inset-x-0 bottom-0 p-5 pb-16 sm:p-8 sm:pb-20 md:p-12 md:pb-24"
+      >
+        <div className="max-w-2xl">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/60">
+            <span className="h-1 w-6 rounded-full bg-aurora" />
+            <span className="text-aurora">#{current + 1} Trending</span>
+            <span aria-hidden className="text-white/25">•</span>
+            {type}
+          </p>
+          <h1 className="mt-3 animate-fade-up font-display text-3xl font-bold leading-[1.05] tracking-tight drop-shadow-2xl sm:text-5xl md:text-6xl">
+            {title}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-white/70">
+            {active.vote_average ? (
+              <span className="inline-flex items-center gap-1.5 font-semibold text-amber-300">
+                <Star size={14} aria-hidden className="fill-amber-300" />
+                {active.vote_average.toFixed(1)}
+              </span>
+            ) : null}
+            {year ? <span className="tabular-nums">{year}</span> : null}
+            {active.adult ? (
+              <span className="rounded border border-red-400/60 px-1 text-[11px] font-extrabold text-red-300">
+                18+
+              </span>
+            ) : null}
+          </div>
+          {active.overview ? (
+            <p className="mt-3 hidden max-w-xl animate-fade-up text-sm leading-relaxed text-white/65 sm:line-clamp-2">
+              {active.overview}
             </p>
-          </Link>
+          ) : null}
+          <div className="mt-5 animate-fade-up">
+            <Link
+              href={`/watch/${active.media_type === 'tv' ? 'tv' : 'movie'}/${active.id}`}
+              className="group inline-flex items-center gap-2.5 rounded-full bg-aurora px-6 py-3 text-sm font-bold text-black shadow-xl shadow-accent/30 transition hover:shadow-glow sm:px-7 sm:py-3.5 sm:text-[15px]"
+            >
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-black/15 transition group-hover:scale-110">
+                <Play size={13} aria-hidden className="ml-px fill-black" />
+              </span>
+              Watch now
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Slide selector / progress pills */}
+      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 sm:bottom-6 sm:right-6 md:bottom-8 md:right-10">
+        {top.map((m, i) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => goTo(i)}
+            aria-label={`Show slide ${i + 1}: ${m.title ?? m.name}`}
+            aria-current={i === current}
+            className="group relative h-1.5 overflow-hidden rounded-full bg-white/25 transition-all sm:h-2"
+            style={{ width: i === current ? '2.75rem' : '1rem' }}
+          >
+            {i === current ? (
+              <span
+                key={`p-${current}-${paused}`}
+                className="absolute inset-0 rounded-full bg-aurora motion-reduce:hidden"
+                style={{
+                  animation: `hero-progress ${SLIDE_MS}ms linear forwards`,
+                  animationPlayState: paused ? 'paused' : 'running',
+                }}
+              />
+            ) : (
+              <span className="absolute inset-0 rounded-full bg-white/0 transition group-hover:bg-white/50" />
+            )}
+          </button>
         ))}
       </div>
     </div>

@@ -36,19 +36,15 @@ export default function WatchlistPage() {
   };
 
   return (
-    <div className="mt-6">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span
-          aria-hidden
-          className="h-6 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500"
-        />
-        <h1 className="text-2xl font-extrabold tracking-tight">My Watchlist</h1>
-        <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs tabular-nums text-white/40">
+    <div className="mt-8">
+      <div className="flex flex-wrap items-center gap-3 px-1">
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-[1.7rem]">My Watchlist</h1>
+        <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs tabular-nums text-white/40">
           {filtered.length} of {items.length}
         </span>
       </div>
 
-      <div className="mt-4 inline-flex gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-sm font-semibold">
+      <div className="mt-4 inline-flex gap-1 rounded-full glass p-1 text-sm font-semibold">
         {(
           [
             { value: 'all', label: 'All' },
@@ -64,7 +60,7 @@ export default function WatchlistPage() {
             className={cn(
               'rounded-full px-5 py-2 transition',
               filter === option.value
-                ? 'bg-accent text-black shadow'
+                ? 'bg-aurora text-black shadow-lg shadow-accent/25'
                 : 'text-white/60 hover:text-white'
             )}
           >
@@ -74,7 +70,7 @@ export default function WatchlistPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+        <div className="mt-8 rounded-2xl glass p-6 text-center">
           <p className="text-sm text-white/60">
             {items.length === 0
               ? 'Your watchlist is empty. Bookmark titles from recommendations or watch pages to save them here.'
@@ -83,20 +79,20 @@ export default function WatchlistPage() {
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/recommended"
-              className="rounded-xl bg-accent px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-accent/30 transition hover:shadow-glow"
+              className="rounded-full bg-aurora px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-accent/25 transition hover:shadow-glow"
             >
               Find recommendations
             </Link>
             <Link
               href="/movies"
-              className="rounded-xl border border-white/10 px-6 py-2.5 text-sm font-semibold text-white/70 transition hover:border-white/25 hover:text-white"
+              className="rounded-full border border-white/10 px-6 py-2.5 text-sm font-semibold text-white/70 transition hover:border-white/25 hover:text-white"
             >
               Browse movies
             </Link>
           </div>
         </div>
       ) : (
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+        <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
           {filtered.map((item) => (
             <div key={`${item.mediaType}-${item.id}`} className="relative w-full">
               <MovieCard

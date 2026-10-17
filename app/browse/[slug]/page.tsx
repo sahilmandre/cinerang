@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { tmdb } from '@/lib/tmdb';
 import AdultGate from '@/components/AdultGate';
 import LoadError from '@/components/LoadError';
+import PageHeader from '@/components/PageHeader';
 import MovieCard, { TMDBItem } from '@/components/MovieCard';
 
 interface Category {
@@ -113,28 +114,21 @@ export default async function BrowsePage({
   const neighbours = [page - 2, page - 1, page, page + 1, page + 2].filter((p) => p >= 1 && p <= totalPages);
 
   const content = (
-    <div className="mt-6">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span
-          className={`h-6 w-1 rounded-full ${
-            cat.adultOnly
-              ? 'bg-gradient-to-b from-red-500 to-red-800'
-              : 'bg-gradient-to-b from-accent to-emerald-500'
-          }`}
-        />
-        <h1 className="text-2xl font-extrabold tracking-tight">{cat.title}</h1>
+    <div className="mt-8">
+      <PageHeader
+        title={cat.title}
+        tone={cat.adultOnly ? 'danger' : 'accent'}
+        count={`Page ${page} of ${totalPages}`}
+      >
         {cat.adultOnly ? (
-          <span className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-extrabold text-white">
+          <span className="rounded-md border border-red-400/50 bg-red-500/10 px-2 py-0.5 text-xs font-extrabold text-red-300">
             18+
           </span>
         ) : null}
-        <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-white/40">
-          Page {page} of {totalPages}
-        </span>
-      </div>
+      </PageHeader>
 
       {cat.adultOnly ? (
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-300/80">
+        <p className="mt-3 max-w-2xl px-1 text-sm leading-relaxed text-red-300/80">
           Adults only — mature collection kept separate from the main catalog.
           By viewing you confirm you are 18 or older.
         </p>
@@ -143,7 +137,7 @@ export default async function BrowsePage({
       <BrowseGrid items={data.results ?? []} type={cat.type} adultOnly={cat.adultOnly} />
 
       {totalPages > 1 && (
-        <nav aria-label="Browse pages" className="mt-8 flex flex-wrap items-center justify-center gap-2">
+        <nav aria-label="Browse pages" className="mt-10 flex flex-wrap items-center justify-center gap-2">
           {page > 1 && (
             <Link
               href={pageLink(page - 1)}
@@ -161,8 +155,8 @@ export default async function BrowsePage({
               aria-label={`Page ${p}`}
               className={`rounded-full px-3.5 py-2 text-sm font-medium tabular-nums transition ${
                 p === page
-                  ? 'bg-accent font-bold text-black shadow-lg shadow-accent/30'
-                  : 'border border-white/10 text-white/70 hover:border-accent/40 hover:text-white'
+                  ? 'bg-aurora font-bold text-black shadow-lg shadow-accent/25'
+                  : 'border border-white/10 text-white/70 hover:border-accent/50 hover:text-white'
               }`}
             >
               {p}
@@ -196,7 +190,7 @@ function BrowseGrid({
   adultOnly?: boolean;
 }) {
   return (
-    <div className="cv-auto mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+    <div className="cv-auto mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
       {items
         .filter((m) => m.poster_path)
         .map((m) => (

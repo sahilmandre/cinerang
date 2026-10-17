@@ -28,54 +28,69 @@ export default function Row({
   };
 
   return (
-    <section aria-labelledby={headingId} className="cv-auto mt-8 scroll-mt-24 md:mt-9">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span aria-hidden className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
-        <h2 id={headingId} className="text-base font-bold tracking-tight text-ink sm:text-lg">
+    <section aria-labelledby={headingId} className="cv-auto group/row mt-10 scroll-mt-24 md:mt-12">
+      <div className="mb-3.5 flex items-center gap-3 px-1">
+        <h2
+          id={headingId}
+          className="font-display text-lg font-bold tracking-tight text-ink sm:text-xl"
+        >
           {title}
         </h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/40">
+        <span className="hidden rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/35 min-[420px]:inline-flex">
           {items.length}
         </span>
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="hidden items-center gap-1 md:flex" role="group" aria-label={`Scroll ${title}`}>
-            <button
-              type="button"
-              onClick={() => scrollBy(-1)}
-              aria-label={`Scroll ${title} left`}
-              className="grid h-7 w-7 place-items-center rounded-full border border-white/10 text-white/60 transition hover:border-accent/50 hover:text-accent"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollBy(1)}
-              aria-label={`Scroll ${title} right`}
-              className="grid h-7 w-7 place-items-center rounded-full border border-white/10 text-white/60 transition hover:border-accent/50 hover:text-accent"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </span>
-          {href && (
-            <Link
-              href={href}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-accent"
-            >
-              View all <ArrowRight size={12} aria-hidden />
-            </Link>
-          )}
-        </div>
+        {href && (
+          <Link
+            href={href}
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full py-1 pl-3 pr-2 text-xs font-semibold text-white/45 transition hover:text-accent"
+          >
+            View all
+            <ArrowRight size={13} aria-hidden />
+          </Link>
+        )}
       </div>
-      <div
-        ref={stripRef}
-        role="region"
-        aria-label={`${title} — scrollable row`}
-        tabIndex={0}
-        className="no-scrollbar snap-strip -mx-4 flex gap-3 overflow-x-auto px-4 pb-2"
-      >
-        {items.map((m) => (
-          <MovieCard key={`${type ?? m.media_type ?? 'x'}-${m.id}`} item={m} forceType={type} markAdult={markAdult} />
-        ))}
+
+      <div className="relative">
+        {/* Desktop edge arrows — fade in when the row is hovered */}
+        <div
+          role="group"
+          aria-label={`Scroll ${title}`}
+          className="pointer-events-none absolute inset-y-0 left-0 right-0 z-10 hidden items-center justify-between md:flex"
+        >
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            aria-label={`Scroll ${title} left`}
+            className="pointer-events-auto ml-1 grid h-10 w-10 -translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white group-hover/row:translate-x-0 group-hover/row:opacity-100"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            aria-label={`Scroll ${title} right`}
+            className="pointer-events-auto mr-1 grid h-10 w-10 translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white group-hover/row:translate-x-0 group-hover/row:opacity-100"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        <div
+          ref={stripRef}
+          role="region"
+          aria-label={`${title} — scrollable row`}
+          tabIndex={0}
+          className="no-scrollbar snap-strip -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-2.5 md:gap-4"
+        >
+          {items.map((m) => (
+            <MovieCard
+              key={`${type ?? m.media_type ?? 'x'}-${m.id}`}
+              item={m}
+              forceType={type}
+              markAdult={markAdult}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );

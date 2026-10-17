@@ -293,11 +293,11 @@ export default function TasteQuiz() {
   // --- Welcome ---
   if (step === 'welcome') {
     return (
-      <section className="mx-auto mt-8 max-w-2xl text-center sm:mt-10">
-        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-3xl text-accent">
+      <section className="mx-auto mt-10 max-w-2xl text-center sm:mt-14">
+        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-aurora-soft text-3xl ring-1 ring-accent/30">
           🎬
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Build your taste
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-white/60">
@@ -307,26 +307,26 @@ export default function TasteQuiz() {
           sharper your recommendations get.
         </p>
         {hadSavedTaste ? (
-          <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/50">
+          <p className="mt-4 rounded-full glass px-4 py-2.5 text-sm text-white/50">
             You already have a saved taste — retaking either quiz updates it.
           </p>
         ) : null}
         <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
           <button
             onClick={() => startQuiz('movie')}
-            className="flex-1 rounded-xl bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/30 transition hover:shadow-glow"
+            className="flex-1 rounded-full bg-aurora px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 transition hover:shadow-glow"
           >
             Movie quiz
           </button>
           <button
             onClick={() => startQuiz('tv')}
-            className="flex-1 rounded-xl border border-accent/40 px-8 py-3.5 text-sm font-bold text-accent transition hover:bg-accent/10"
+            className="flex-1 rounded-full border border-accent/40 px-8 py-3.5 text-sm font-bold text-accent transition hover:bg-accent/10"
           >
             Series quiz
           </button>
           <Link
             href="/"
-            className="flex-1 rounded-xl border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
+            className="flex-1 rounded-full border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
           >
             Skip
           </Link>
@@ -338,11 +338,11 @@ export default function TasteQuiz() {
   // --- Done ---
   if (step === 'done') {
     return (
-      <section className="mx-auto mt-8 max-w-2xl text-center sm:mt-10">
-        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-3xl text-emerald-400">
+      <section className="mx-auto mt-10 max-w-2xl text-center sm:mt-14">
+        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-aurora-soft text-3xl ring-1 ring-accent/30">
           ✨
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Taste saved
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-white/60">
@@ -354,19 +354,19 @@ export default function TasteQuiz() {
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             href={recommendedHref}
-            className="rounded-xl bg-accent px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/30 transition hover:shadow-glow"
+            className="rounded-full bg-aurora px-8 py-3.5 text-sm font-bold text-black shadow-lg shadow-accent/25 transition hover:shadow-glow"
           >
             See recommendations
           </Link>
           <Link
             href="/"
-            className="rounded-xl border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
+            className="rounded-full border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
           >
             Go to Home
           </Link>
           <button
             onClick={refineTaste}
-            className="rounded-xl border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
+            className="rounded-full border border-white/10 px-8 py-3.5 text-sm font-semibold text-white/60 transition hover:border-white/25 hover:text-white"
           >
             Refine taste
           </button>
@@ -387,7 +387,7 @@ export default function TasteQuiz() {
               genres
             </span>
           </div>
-          <h2 className="text-xl font-bold tracking-tight">
+          <h2 className="font-display text-xl font-bold tracking-tight">
             Which {kind === 'movie' ? 'movie' : 'series'} genres do you love?
           </h2>
           <p className="mt-2 text-sm text-white/60">
@@ -439,10 +439,10 @@ export default function TasteQuiz() {
               }}
               disabled={!selectedGenres.length}
               className={cn(
-                'rounded-xl px-8 py-3 text-sm font-bold transition',
+                'rounded-full px-8 py-3 text-sm font-bold transition',
                 !selectedGenres.length
                   ? 'cursor-not-allowed border border-white/10 bg-white/5 text-white/40'
-                  : 'bg-accent text-black shadow-lg shadow-accent/30 hover:shadow-glow'
+                  : 'bg-aurora text-black shadow-lg shadow-accent/25 hover:shadow-glow'
               )}
             >
               Continue →
@@ -464,7 +464,7 @@ export default function TasteQuiz() {
             {TOTAL_ROUNDS}
           </span>
         </div>
-        <h2 className="text-xl font-bold tracking-tight">
+        <h2 className="font-display text-xl font-bold tracking-tight">
           Which of these would you watch?
         </h2>
         <p className="mt-2 text-sm text-white/60">
@@ -658,10 +658,10 @@ export default function TasteQuiz() {
             onClick={confirmRound}
             disabled={!pickedIds.length}
             className={cn(
-              'rounded-xl px-7 py-2.5 text-sm font-bold transition',
+              'rounded-full px-7 py-2.5 text-sm font-bold transition',
               !pickedIds.length
                 ? 'cursor-not-allowed border border-white/10 bg-white/5 text-white/40'
-                : 'bg-accent text-black shadow-lg shadow-accent/30 hover:shadow-glow'
+                : 'bg-aurora text-black shadow-lg shadow-accent/25 hover:shadow-glow'
             )}
           >
             {round >= TOTAL_ROUNDS ? 'Finish' : 'Next'} →
@@ -675,7 +675,7 @@ export default function TasteQuiz() {
         className="mt-4 h-1 w-full overflow-hidden rounded-full bg-white/5"
       >
         <div
-          className="h-full rounded-full bg-accent transition-all duration-500"
+          className="h-full rounded-full bg-aurora transition-all duration-500"
           style={{ width: `${progress}%` }}
         />
       </div>

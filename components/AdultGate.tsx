@@ -49,15 +49,15 @@ export default function AdultGate({ children }: { children: React.ReactNode }) {
       aria-modal="true"
       aria-labelledby="adult-gate-title"
       aria-describedby="adult-gate-desc"
-      className="mx-auto mt-8 w-full max-w-lg rounded-2xl border border-red-500/25 bg-card/70 p-6 text-center shadow-2xl shadow-red-950/30 backdrop-blur sm:mt-10 sm:p-8"
+      className="mx-auto mt-8 w-full max-w-lg rounded-2xl border border-red-500/25 bg-[#131015]/80 p-6 text-center shadow-2xl shadow-red-950/30 backdrop-blur-xl sm:mt-10 sm:p-8"
     >
       <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-red-500/15 text-red-400">
         <ShieldAlert size={26} aria-hidden />
       </span>
-      <p className="mt-4 inline-block rounded-md bg-red-600 px-2 py-0.5 text-xs font-extrabold tracking-widest text-white">
+      <p className="mt-4 inline-block rounded-md border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-xs font-extrabold tracking-widest text-red-300">
         18+
       </p>
-      <h1 id="adult-gate-title" className="mt-2 text-2xl font-extrabold tracking-tight">
+      <h1 id="adult-gate-title" className="mt-2 font-display text-2xl font-bold tracking-tight">
         Adults only
       </h1>
       <p id="adult-gate-desc" className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-white/60">
@@ -68,13 +68,13 @@ export default function AdultGate({ children }: { children: React.ReactNode }) {
         <button
           onClick={enter}
           autoFocus
-          className="rounded-xl bg-red-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-400"
+          className="rounded-full bg-red-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-400"
         >
           I am 18+ — Enter
         </button>
         <Link
           href="/"
-          className="rounded-xl border border-white/10 px-6 py-2.5 text-center text-sm font-semibold text-white/70 transition hover:border-white/25 hover:text-white"
+          className="rounded-full border border-white/10 px-6 py-2.5 text-center text-sm font-semibold text-white/70 transition hover:border-white/25 hover:text-white"
         >
           Go back
         </Link>

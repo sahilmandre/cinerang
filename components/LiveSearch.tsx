@@ -15,18 +15,23 @@ function label(item: SearchResult) {
   return { type, title, year };
 }
 
-export default function LiveSearch() {
+export default function LiveSearch({ autoFocus = false }: { autoFocus?: boolean }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [highlight, setHighlight] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const inputId = useId();
   const router = useRouter();
 
   const showDropdown = open && q.trim().length >= 2;
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -86,10 +91,11 @@ export default function LiveSearch() {
         <Search
           size={16}
           aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35"
         />
         <input
           id={inputId}
+          ref={inputRef}
           value={q}
           role="combobox"
           aria-expanded={showDropdown}
@@ -98,6 +104,7 @@ export default function LiveSearch() {
           aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
           autoComplete="off"
           enterKeyHint="search"
+          autoFocus={autoFocus}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -121,14 +128,14 @@ export default function LiveSearch() {
               setHighlight((h) => Math.max(h - 1, -1));
             }
           }}
-          placeholder="Search titles…"
-          className="w-full rounded-xl border border-white/10 bg-card/80 py-2.5 pl-9 pr-9 text-sm outline-none backdrop-blur transition placeholder:text-white/30 focus:border-accent/70 focus:ring-2 focus:ring-accent/20 lg:rounded-lg lg:py-1.5 lg:text-[13px]"
+          placeholder="Search movies, series, anime…"
+          className="w-full rounded-full border border-white/10 bg-white/[0.05] py-2 pl-10 pr-9 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-accent/60 focus:bg-white/[0.07] focus:ring-2 focus:ring-accent/20"
         />
         {loading && (
           <Loader2
             size={16}
             aria-hidden
-            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-accent"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-accent"
           />
         )}
         <span aria-live="polite" className="sr-only">
@@ -137,15 +144,15 @@ export default function LiveSearch() {
       </div>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-white/10 bg-card/95 shadow-2xl shadow-black/60 backdrop-blur-xl">
+        <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-50 overflow-hidden rounded-2xl border border-white/10 bg-[#101911]/95 shadow-2xl shadow-black/70 backdrop-blur-2xl">
           {loading && results.length === 0 ? (
-            <p className="flex items-center gap-2 px-4 py-3 text-sm text-white/50">
+            <p className="flex items-center gap-2 px-4 py-3.5 text-sm text-white/50">
               <Loader2 size={14} className="animate-spin text-accent" /> Searching…
             </p>
           ) : results.length === 0 ? (
             <button
               onClick={() => go(q)}
-              className="block w-full px-4 py-3 text-left text-sm text-white/50 transition hover:bg-white/5 hover:text-white"
+              className="block w-full px-4 py-3.5 text-left text-sm text-white/50 transition hover:bg-white/5 hover:text-white"
             >
               No quick matches — press Enter for full search
             </button>
@@ -162,8 +169,8 @@ export default function LiveSearch() {
                         onClick={() => setOpen(false)}
                         onMouseEnter={() => setHighlight(i)}
                         className={cn(
-                          'flex items-center gap-3 px-3 py-2 transition',
-                          i === highlight ? 'bg-white/10' : 'hover:bg-white/5'
+                          'flex items-center gap-3 px-3 py-2.5 transition',
+                          i === highlight ? 'bg-white/[0.07]' : 'hover:bg-white/5'
                         )}
                       >
                         <Image
@@ -173,13 +180,13 @@ export default function LiveSearch() {
                           width={92}
                           height={138}
                           loading="lazy"
-                          className="h-12 w-8 shrink-0 rounded bg-white/5 object-cover"
+                          className="h-14 w-[38px] shrink-0 rounded-md bg-white/5 object-cover"
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{title}</p>
                           <p className="flex items-center gap-1.5 text-xs text-white/40">
                             {type === 'tv' ? <Tv size={11} aria-hidden /> : <Film size={11} aria-hidden />}
-                            {type.toUpperCase()} {year && `• ${year}`}
+                            {type === 'tv' ? 'Series' : 'Movie'} {year && `• ${year}`}
                             {r.vote_average ? ` • ★ ${r.vote_average.toFixed(1)}` : ''}
                           </p>
                         </div>
@@ -190,7 +197,7 @@ export default function LiveSearch() {
               </ul>
               <button
                 onClick={() => go(q)}
-                className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-sm font-medium text-accent transition hover:bg-white/5"
+                className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-sm font-medium text-accent transition hover:bg-accent/10"
               >
                 See all results for “{q.trim()}” →
               </button>

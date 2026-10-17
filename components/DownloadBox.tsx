@@ -77,17 +77,17 @@ export default function DownloadBox({
   ] as const;
 
   return (
-    <section aria-label="Download options" className="mt-4 rounded-2xl border border-white/[0.07] bg-card/60 p-4 backdrop-blur">
+    <section aria-label="Download options" className="mt-4 rounded-2xl glass p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-white/50">
+        <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
           <Download size={13} aria-hidden /> Download
         </h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/40">
+        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/35">
           separate sources — embeds are stream-only
         </span>
       </div>
 
-      <div role="tablist" aria-label="Download methods" className="mt-3 flex flex-wrap gap-2">
+      <div role="tablist" aria-label="Download methods" className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-0.5">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -95,10 +95,10 @@ export default function DownloadBox({
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition',
+              'shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition',
               tab === t.id
-                ? 'bg-accent font-bold text-black shadow-lg shadow-accent/30'
-                : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/40 hover:text-white'
+                ? 'bg-aurora font-bold text-black shadow-lg shadow-accent/25'
+                : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/50 hover:text-white'
             )}
           >
             {t.label}
@@ -111,11 +111,14 @@ export default function DownloadBox({
           {/* VidVault: true 1-click MKV, TMDB-keyed like the stream embeds */}
           <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3">
             <p className="text-sm font-bold text-white">
-              Direct MKV <span className="ml-1 rounded bg-emerald-500/20 px-1.5 py-px text-[10px] font-extrabold text-emerald-300">1-click</span>
+              Direct MKV <span className="ml-1 rounded bg-aurora px-1.5 py-px text-[10px] font-extrabold text-black">1-click</span>
               <span className="ml-1.5 text-xs font-medium text-white/45">via VidVault</span>
             </p>
             {vv === null ? (
-              <p className="mt-1.5 text-sm text-white/50">Checking converted qualities…</p>
+              <p className="mt-1.5 flex items-center gap-2 text-sm text-white/50">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                Checking converted qualities…
+              </p>
             ) : vv.length ? (
               <>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -123,7 +126,7 @@ export default function DownloadBox({
                     <a
                       key={q}
                       href={vidvaultFileUrl(ctx, tmdbId, q)}
-                      className="inline-flex items-center gap-1 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-bold text-black transition hover:brightness-110"
+                      className="inline-flex items-center gap-1 rounded-full bg-aurora px-3.5 py-1.5 text-[13px] font-bold text-black transition hover:shadow-glow"
                     >
                       <Download size={13} aria-hidden /> {q} .mkv
                     </a>
@@ -160,13 +163,16 @@ export default function DownloadBox({
           <div className="mt-3">
           {type === 'movie' ? (
             yts === null && !ytsError ? (
-              <p className="text-sm text-white/50">Checking YTS for direct torrents…</p>
+              <p className="flex items-center gap-2 text-sm text-white/50">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                Checking YTS for direct torrents…
+              </p>
             ) : yts?.length ? (
               <ul className="grid gap-2">
                 {yts.map((t) => (
                   <li
                     key={`${t.quality}-${t.type}`}
-                    className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] bg-black/30 p-2.5 text-sm"
+                    className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.06] bg-black/30 p-2.5 text-sm"
                   >
                     <span className="rounded-md bg-accent/15 px-2 py-0.5 font-bold tabular-nums text-accent">
                       {t.quality} {t.type}
@@ -175,7 +181,7 @@ export default function DownloadBox({
                     <span className="ml-auto flex gap-2">
                       <a
                         href={t.url}
-                        className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-bold text-black transition hover:brightness-110"
+                        className="inline-flex items-center gap-1 rounded-full bg-aurora px-3 py-1 text-xs font-bold text-black transition hover:shadow-glow"
                       >
                         <Download size={12} aria-hidden /> .torrent
                       </a>
@@ -222,8 +228,8 @@ export default function DownloadBox({
       {tab === 'ddl' && (
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {ddls.map((d) => (
-            <li key={d.name} className="rounded-xl border border-white/[0.07] bg-black/30 p-2.5 text-sm">
-              <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-white hover:text-accent">
+            <li key={d.name} className="rounded-xl border border-white/[0.06] bg-black/30 p-2.5 text-sm">
+              <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-white transition hover:text-accent">
                 {d.name} <ExternalLink size={12} aria-hidden />
               </a>
               <p className="mt-0.5 text-xs text-white/50">{d.note} — pre-searched for this title.</p>
@@ -235,8 +241,8 @@ export default function DownloadBox({
       {tab === 'torrent' && (
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {torrents.map((d) => (
-            <li key={d.name} className="rounded-xl border border-white/[0.07] bg-black/30 p-2.5 text-sm">
-              <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-white hover:text-accent">
+            <li key={d.name} className="rounded-xl border border-white/[0.06] bg-black/30 p-2.5 text-sm">
+              <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-white transition hover:text-accent">
                 {d.name} <ExternalLink size={12} aria-hidden />
               </a>
               <p className="mt-0.5 text-xs text-white/50">{d.note}.</p>
@@ -287,7 +293,7 @@ function ExtBtn({ name, url }: { name: string; url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
+      className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-white/70 transition hover:border-accent/50 hover:text-white"
     >
       {name} <ExternalLink size={12} aria-hidden />
     </a>

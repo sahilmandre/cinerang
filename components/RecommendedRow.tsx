@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shuffle } from 'lucide-react';
+import { ArrowRight, Shuffle } from 'lucide-react';
 import RecommendationCard, {
   type RecommendationItem,
 } from '@/components/RecommendationCard';
@@ -82,14 +82,14 @@ export default function RecommendedRow({
 
   if (loading && items.length === 0) {
     return (
-      <section className="cv-auto mt-8 scroll-mt-24 md:mt-9">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-ink sm:text-lg">
-          {heading}
-        </h2>
-        <div className="no-scrollbar flex gap-3 overflow-x-auto px-4 pb-2">
+      <section className="cv-auto mt-10 scroll-mt-24 md:mt-12">
+        <div className="mb-3.5 flex items-center gap-3 px-1">
+          <div className="h-5 w-48 rounded bg-white/10 shimmer" />
+        </div>
+        <div className="no-scrollbar flex gap-3.5 overflow-x-auto px-4 pb-2 md:gap-4">
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="w-[136px] shrink-0 sm:w-[148px] md:w-[160px]">
-              <div className="aspect-[2/3] rounded-xl bg-white/5 shimmer" />
+              <div className="aspect-[2/3] rounded-2xl bg-white/5 shimmer" />
               <div className="mt-2 h-3 w-32 rounded bg-white/5 shimmer" />
             </div>
           ))}
@@ -100,21 +100,17 @@ export default function RecommendedRow({
 
   if (items.length === 0) {
     return (
-      <section className="cv-auto mt-8 scroll-mt-24 md:mt-9">
-        <div className="mb-3 flex items-center gap-2.5">
-          <span
-            aria-hidden
-            className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500"
-          />
-          <h2 className="text-base font-bold tracking-tight text-ink sm:text-lg">
+      <section className="cv-auto mt-10 scroll-mt-24 md:mt-12">
+        <div className="mb-3.5 flex items-center gap-3 px-1">
+          <h2 className="font-display text-lg font-bold tracking-tight text-ink sm:text-xl">
             {heading}
           </h2>
         </div>
-        <p className="text-sm text-white/50">
+        <p className="px-1 text-sm text-white/50">
           Tell us your taste on the{' '}
-          <a href="/taste" className="text-accent hover:underline">
+          <Link href="/taste" className="font-semibold text-accent hover:underline">
             Taste page
-          </a>
+          </Link>
           , and we&apos;ll suggest {emptyNoun} just for you.
         </p>
       </section>
@@ -122,23 +118,21 @@ export default function RecommendedRow({
   }
 
   return (
-    <section className="cv-auto mt-8 scroll-mt-24 md:mt-9">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span
-          aria-hidden
-          className="h-5 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500"
-        />
-        <h2 className="text-base font-bold tracking-tight text-ink sm:text-lg">
+    <section className="cv-auto mt-10 scroll-mt-24 md:mt-12">
+      <div className="mb-3.5 flex items-center gap-3 px-1">
+        <h2 className="font-display text-lg font-bold tracking-tight text-ink sm:text-xl">
           {heading}
         </h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/40">
+        <span className="hidden rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/35 min-[420px]:inline-flex">
           {items.length}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={() => setShuffleKey((key) => key + 1)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-accent"
+            aria-label="Shuffle recommendations"
+            title="Shuffle recommendations"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full py-1 pl-3 pr-2 text-xs font-semibold text-white/45 transition hover:text-accent"
           >
             <Shuffle size={12} aria-hidden />
             Shuffle
@@ -146,14 +140,15 @@ export default function RecommendedRow({
           {viewAllHref ? (
             <Link
               href={viewAllHref}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-accent"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full py-1 pl-3 pr-2 text-xs font-semibold text-white/45 transition hover:text-accent"
             >
               View all
+              <ArrowRight size={13} aria-hidden />
             </Link>
           ) : null}
         </div>
       </div>
-      <div className="no-scrollbar snap-strip -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+      <div className="no-scrollbar snap-strip -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-2 md:gap-4">
         {items.map((m) => (
           <RecommendationCard
             key={`${media}-${m.id}`}
@@ -164,7 +159,7 @@ export default function RecommendedRow({
           />
         ))}
       </div>
-      <p className="mt-1 text-xs text-white/35">
+      <p className="mt-1 px-1 text-xs text-white/30">
         Like trains your taste · Dislike hides a title · Bookmark saves it to My
         Watchlist
       </p>

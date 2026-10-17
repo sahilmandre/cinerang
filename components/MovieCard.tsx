@@ -16,6 +16,7 @@ export interface TMDBItem {
   adult?: boolean;
   genre_ids?: number[];
   release_date?: string;
+  first_air_date?: string;
 }
 
 export function mediaTypeOf(item: TMDBItem, fallback: 'movie' | 'tv' = 'movie') {
@@ -44,18 +45,19 @@ export default function MovieCard({
 }) {
   const type = forceType ?? mediaTypeOf(item);
   const title = item.title ?? item.name ?? 'Unknown';
+  const year = (item.release_date ?? '').slice(0, 4);
   return (
     <Link
       href={`/watch/${type}/${item.id}`}
       aria-label={`${title} (${type === 'tv' ? 'TV series' : 'movie'})`}
       className={cn(
-        'group overflow-hidden rounded-xl border border-white/[0.07] bg-card shadow-card transition duration-300',
-        'hover:-translate-y-1 hover:border-accent/50 hover:shadow-glow',
-        'focus-visible:-translate-y-1 focus-visible:border-accent/50',
+        'group overflow-hidden rounded-2xl bg-card/70 shadow-card transition duration-300',
+        'hover:-translate-y-1.5 hover:bg-card hover:shadow-glow hover:ring-1 hover:ring-accent/50',
+        'focus-visible:-translate-y-1.5 focus-visible:ring-1 focus-visible:ring-accent/50',
         fluid ? 'w-full' : 'w-[136px] shrink-0 sm:w-[148px] md:w-[160px]'
       )}
     >
-      <div className="relative overflow-hidden bg-white/[0.04]">
+      <div className="relative overflow-hidden bg-white/[0.03]">
         <Image
           src={poster(item.poster_path, 'w342')}
           alt={title}
@@ -65,49 +67,51 @@ export default function MovieCard({
           sizes="(max-width: 640px) 136px, (max-width: 768px) 148px, 160px"
           className="aspect-[2/3] w-full object-cover transition duration-500 group-hover:scale-105 group-focus-visible:scale-105"
         />
-        {item.vote_average && matchScore == null ? (
-          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold backdrop-blur">
-            <Star size={10} aria-hidden className="fill-amber-400 text-amber-400" />
+        {/* Bottom scrim so badges stay readable over bright art */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent"
+        />
+        {item.vote_average ? (
+          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold text-white/90 backdrop-blur-md">
+            <Star size={10} aria-hidden className="fill-amber-300 text-amber-300" />
             {item.vote_average.toFixed(1)}
           </span>
         ) : null}
-        {item.vote_average && matchScore != null ? (
-          <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold backdrop-blur">
-            <Star size={10} aria-hidden className="fill-amber-400 text-amber-400" />
-            {item.vote_average.toFixed(1)}
+        {matchScore != null ? (
+          <span className="absolute bottom-1.5 right-1.5 rounded-full bg-aurora px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums text-black shadow-lg shadow-accent/25">
+            {Math.round(matchScore)}%
           </span>
         ) : null}
         {item.adult || markAdult ? (
-          <span className="absolute right-1.5 top-1.5 rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-extrabold shadow-lg">
+          <span className="absolute right-1.5 top-1.5 rounded-md border border-red-400/40 bg-red-950/70 px-1.5 py-0.5 text-[10px] font-extrabold text-red-300 backdrop-blur-md">
             18+
           </span>
         ) : null}
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
+          className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 transition duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
         />
         <span
           aria-hidden
           className="absolute inset-0 grid place-items-center opacity-0 transition duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
         >
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-accent text-black shadow-xl shadow-accent/40">
-            <Play size={16} className="ml-0.5 fill-black" />
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-aurora text-black shadow-xl shadow-accent/40 transition duration-300 group-hover:scale-110">
+            <Play size={17} className="ml-0.5 fill-black" />
           </span>
         </span>
       </div>
-      <div className="p-2">
-        <p className="truncate text-[13px] font-semibold">{title}</p>
-        <div className="mt-0.5 flex items-center justify-between gap-1.5">
-          <p className="text-[11px] uppercase tracking-wide text-white/35">{type}</p>
-          {matchScore != null && (
-            <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-black">
-              {Math.round(matchScore)}% match
-            </span>
-          )}
+      <div className="p-2.5 pb-2">
+        <p className="truncate text-[13px] font-semibold leading-snug">{title}</p>
+        <div className="mt-1 flex items-center justify-between gap-1.5">
+          <p className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-white/35">
+            {type === 'tv' ? 'Series' : 'Movie'}
+            {year ? ` • ${year}` : ''}
+          </p>
         </div>
         {matchReason && (
-          <p className="mt-1 text-[10px] uppercase tracking-wider text-accent/80 leading-tight">
-            Because you like {matchReason}
+          <p className="mt-1 truncate text-[10px] uppercase tracking-wider text-accent/75">
+            ∵ {matchReason}
           </p>
         )}
       </div>

@@ -43,10 +43,10 @@ export default function WatchlistButton({
       aria-pressed={saved}
       title={saved ? 'Remove from My Watchlist' : 'Add to My Watchlist'}
       className={cn(
-        'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition',
+        'inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition',
         saved
-          ? 'border-transparent bg-emerald-400 text-black shadow-lg shadow-emerald-400/25'
-          : 'border-white/10 bg-white/[0.03] text-white/80 hover:border-accent/50 hover:text-white',
+          ? 'border-transparent bg-aurora text-black shadow-lg shadow-accent/25'
+          : 'glass text-white/85 hover:border-accent/50 hover:text-white',
         className
       )}
     >

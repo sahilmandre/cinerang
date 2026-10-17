@@ -1,6 +1,7 @@
 import { tmdb } from '@/lib/tmdb';
 import Row from '@/components/Row';
 import AdultGate from '@/components/AdultGate';
+import PageHeader from '@/components/PageHeader';
 
 export default async function AdultPage() {
   const [movies, tv, vivamax, ullu] = await Promise.all([
@@ -11,17 +12,13 @@ export default async function AdultPage() {
   ]);
   return (
     <AdultGate>
-      <div className="mt-6">
-        <div className="flex items-center gap-2.5">
-          <span className="h-6 w-1 rounded-full bg-gradient-to-b from-red-500 to-red-800" />
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            18+ <span className="text-red-400">Only</span>
-          </h1>
-          <span className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-extrabold text-white">
+      <div className="mt-8">
+        <PageHeader title="18+ Only" tone="danger">
+          <span className="rounded-md border border-red-400/50 bg-red-500/10 px-2 py-0.5 text-xs font-extrabold text-red-300">
             ADULTS ONLY
           </span>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/50">
+        </PageHeader>
+        <p className="mt-3 max-w-2xl px-1 text-sm leading-relaxed text-white/50">
           Mature collection, kept separate from the main catalog: erotic
           cinema, erotic series, Vivamax films and Ullu Originals. Nothing
           here appears on Home, Movies or TV.

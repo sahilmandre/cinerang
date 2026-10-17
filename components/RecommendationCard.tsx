@@ -155,7 +155,7 @@ export default function RecommendationCard({
               : `Add ${item.title} to My Watchlist`
           }
           className={iconButton(
-            saved ? 'border-transparent bg-emerald-400 text-black shadow-lg shadow-emerald-400/30' : null
+            saved ? 'border-transparent bg-accent text-black shadow-lg shadow-accent/30' : null
           )}
         >
           <Bookmark size={13} aria-hidden />

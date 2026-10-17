@@ -1,6 +1,7 @@
 import { tmdb } from '@/lib/tmdb';
 import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
+import PageHeader from '@/components/PageHeader';
 import LoadError from '@/components/LoadError';
 
 // One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
@@ -24,11 +25,8 @@ export default async function TVPage() {
     return <LoadError title="Could not load TV Series" retryHref="/tv" />;
   }
   return (
-    <div className="mt-6">
-      <div className="flex items-center gap-2.5">
-        <span className="h-6 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
-        <h1 className="text-2xl font-extrabold tracking-tight">TV Series</h1>
-      </div>
+    <div className="mt-8">
+      <PageHeader title="TV Series" />
       <Row title="English Series" items={english.results ?? []} type="tv" href="/browse/tv-english" />
       <Row title="Hindi Series" items={hindi.results ?? []} type="tv" href="/browse/tv-hindi" />
       <Row title="Korean Series" items={korean.results ?? []} type="tv" href="/browse/tv-korean" />

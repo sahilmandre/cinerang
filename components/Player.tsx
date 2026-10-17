@@ -247,106 +247,120 @@ export default function Player({
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-white/45">Video Sources</h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] tabular-nums text-white/40">
-          {SERVERS.length} servers · auto-failover
-        </span>
-        {adult ? (
-          <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-300">
-            18+ title — adult-resolving servers listed first, start with ★
+      {/* Source toolbar — servers left, utility controls right */}
+      <div className="rounded-2xl glass p-2 sm:p-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+          <span className="pl-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
+            Sources
           </span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] tabular-nums text-white/40">
+            {SERVERS.length} · auto-failover
+          </span>
+          {adult ? (
+            <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-300">
+              18+ — start with ★
+            </span>
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open player in new tab"
+              title="Open player in new tab — use this to test if a blank iframe is an X-Frame/CSP block vs dead source"
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-white/60 transition hover:border-accent/50 hover:text-white"
+            >
+              <SquareArrowOutUpRight size={14} aria-hidden />
+            </a>
+            <button
+              onClick={toggleBlocker}
+              aria-pressed={blocker}
+              title="Sandboxed frame blocks popups and tab-hijacks. Turn on for blocking; turn off if a player refuses to load inside it."
+              className={cn(
+                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition',
+                blocker
+                  ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+                  : 'border-white/10 text-white/60 hover:border-accent/50 hover:text-white'
+              )}
+            >
+              {blocker ? <ShieldCheck size={13} aria-hidden /> : <ShieldOff size={13} aria-hidden />}
+              Blocker {blocker ? 'on' : 'off'}
+            </button>
+            <button
+              onClick={() => {
+                markLoaded(false);
+                setKey((k) => k + 1);
+              }}
+              aria-label="Reload player"
+              title="Reload the current server"
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-white/60 transition hover:border-accent/50 hover:text-white"
+            >
+              <RotateCcw size={14} aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        {/* Server chips — scrollable strip on narrow screens */}
+        <div
+          role="radiogroup"
+          aria-label="Video servers"
+          className="no-scrollbar -mx-1 mt-2 flex snap-x items-center gap-1.5 overflow-x-auto px-1 pb-0.5"
+        >
+          {list.map((s) => (
+            <button
+              key={s.id}
+              role="radio"
+              aria-checked={server === s.id}
+              onClick={() => {
+                loadServer(s.id, true);
+                persist();
+              }}
+              className={cn(
+                'shrink-0 snap-start rounded-full px-3 py-1.5 text-[13px] font-medium transition',
+                server === s.id
+                  ? 'bg-aurora font-bold text-black shadow-lg shadow-accent/25'
+                  : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/50 hover:text-white'
+              )}
+            >
+              {s.id === recommended ? '★ ' : null}
+              {s.name}
+              {s.hindi ? (
+                <span className="ml-1.5 rounded bg-sky-500/20 px-1 py-px text-[10px] font-extrabold text-sky-300">
+                  Hindi
+                </span>
+              ) : null}
+              {s.ads === 'none' ? (
+                <span className="ml-1.5 rounded bg-emerald-500/20 px-1 py-px text-[10px] font-extrabold text-emerald-300">
+                  Ad-free
+                </span>
+              ) : null}
+              {s.ads === 'minimal' ? (
+                <span className="ml-1.5 rounded bg-white/10 px-1 py-px text-[10px] font-bold text-white/60">
+                  Few ads
+                </span>
+              ) : null}
+              {adult && s.adultOk ? (
+                <span className="ml-1.5 rounded bg-red-500/25 px-1 py-px text-[10px] font-extrabold text-red-200">
+                  18+
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        {blocker && current?.noSandbox ? (
+          <p className="mx-1 mt-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2 text-xs leading-relaxed text-amber-200/90">
+            {current.name} plays direct — it refuses sandboxed frames, so the
+            popup-blocker can&apos;t apply here. Switch server for full blocking.
+          </p>
         ) : null}
       </div>
-      <div
-        role="radiogroup"
-        aria-label="Video servers"
-        className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-card/60 p-2.5 backdrop-blur"
-      >
-        {list.map((s) => (
-          <button
-            key={s.id}
-            role="radio"
-            aria-checked={server === s.id}
-            onClick={() => {
-              loadServer(s.id, true);
-              persist();
-            }}
-            className={cn(
-              'rounded-full px-3 py-1.5 text-[13px] font-medium transition sm:px-3.5',
-              server === s.id
-                ? 'bg-accent font-bold text-black shadow-lg shadow-accent/30'
-                : 'border border-white/10 bg-white/[0.03] text-white/70 hover:border-accent/40 hover:text-white'
-            )}
-          >
-            {s.id === recommended ? '★ ' : null}
-            {s.name}
-            {s.hindi ? (
-              <span className="ml-1.5 rounded bg-sky-500/20 px-1 py-px text-[10px] font-extrabold text-sky-300">
-                Hindi
-              </span>
-            ) : null}
-            {s.ads === 'none' ? (
-              <span className="ml-1.5 rounded bg-emerald-500/20 px-1 py-px text-[10px] font-extrabold text-emerald-300">
-                Ad-free
-              </span>
-            ) : null}
-            {s.ads === 'minimal' ? (
-              <span className="ml-1.5 rounded bg-white/10 px-1 py-px text-[10px] font-bold text-white/60">
-                Few ads
-              </span>
-            ) : null}
-            {adult && s.adultOk ? (
-              <span className="ml-1.5 rounded bg-red-500/25 px-1 py-px text-[10px] font-extrabold text-red-200">
-                18+
-              </span>
-            ) : null}
-          </button>
-        ))}
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
-          title="Open player in new tab — use this to test if a blank iframe is an X-Frame/CSP block vs dead source"
-        >
-          <SquareArrowOutUpRight size={13} aria-hidden /> Open
-        </a>
-        <button
-          onClick={toggleBlocker}
-          aria-pressed={blocker}
-          title="Sandboxed frame blocks popups and tab-hijacks. Turn on for blocking; turn off if a player refuses to load inside it."
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition',
-            blocker
-              ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
-              : 'border-white/10 text-white/70 hover:border-accent/40 hover:text-white'
-          )}
-        >
-          {blocker ? <ShieldCheck size={14} aria-hidden /> : <ShieldOff size={14} aria-hidden />}
-          <span aria-hidden className={cn('h-2 w-2 rounded-full', blocker ? 'bg-emerald-400' : 'bg-white/25')} />
-          Blocker {blocker ? 'on' : 'off'}
-        </button>
-        <button
-          onClick={() => {
-            markLoaded(false);
-            setKey((k) => k + 1);
-          }}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-white/70 transition hover:border-accent/40 hover:text-white"
-        >
-          <RotateCcw size={13} aria-hidden /> Reload
-        </button>
-      </div>
-      {blocker && current?.noSandbox ? (
-        <p className="mt-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2 text-xs leading-relaxed text-amber-200/90">
-          {current.name} plays direct — it refuses sandboxed frames, so the
-          popup-blocker can&apos;t apply here. Switch server for full blocking.
-        </p>
-      ) : null}
 
+      {/* Season / episode controls */}
       {type === 'tv' && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2.5 rounded-2xl border border-white/[0.07] bg-card/60 px-3 py-2.5 text-sm backdrop-blur">
-          <label htmlFor="player-season" className="text-xs font-semibold uppercase tracking-wide text-white/50">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-2xl glass px-3 py-2.5 text-sm">
+          <label htmlFor="player-season" className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
             Season
           </label>
           <input
@@ -360,9 +374,9 @@ export default function Player({
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
-            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
+            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center text-sm tabular-nums outline-none transition focus:border-accent/60"
           />
-          <label htmlFor="player-episode" className="text-xs font-semibold uppercase tracking-wide text-white/50">
+          <label htmlFor="player-episode" className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
             Episode
           </label>
           <input
@@ -376,21 +390,23 @@ export default function Player({
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
-            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent/60"
+            className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center text-sm tabular-nums outline-none transition focus:border-accent/60"
           />
           <button
             onClick={() => setSeasonEp(season, episode + 1)}
-            className="ml-auto rounded-full bg-accent/15 px-4 py-1.5 font-semibold text-accent transition hover:bg-accent/25"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-4 py-1.5 text-[13px] font-bold text-accent transition hover:bg-accent/25"
           >
-            Next episode →
+            Next episode <span aria-hidden>→</span>
           </button>
         </div>
       )}
 
+      {/* Player frame */}
       <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card ring-1 ring-white/5">
         {!loaded && !exhausted && (
           <div aria-hidden className="shimmer absolute inset-0 z-10 grid place-items-center bg-white/[0.03]">
-            <p className="rounded-full bg-black/60 px-4 py-1.5 text-xs font-medium text-white/60 backdrop-blur">
+            <p className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-1.5 text-xs font-medium text-white/70 backdrop-blur">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
               Loading player…
             </p>
           </div>
@@ -418,7 +434,7 @@ export default function Player({
             className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 p-4 text-center transition hover:bg-black/70"
             aria-label="Start playback — blocks the first ad popup click"
           >
-            <span className="grid h-16 w-16 place-items-center rounded-full bg-accent text-black shadow-lg shadow-accent/30 transition hover:scale-105">
+            <span className="grid h-16 w-16 place-items-center rounded-full bg-aurora text-black shadow-lg shadow-accent/30 transition hover:scale-105">
               <Play size={26} aria-hidden className="ml-1 fill-black" />
             </span>
             <span className="text-sm font-bold text-white">Click to play</span>
@@ -439,8 +455,10 @@ export default function Player({
           </button>
         )}
       </div>
+
+      {/* Failover status */}
       {exhausted ? (
-        <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-200">
+        <div className="mt-2.5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3.5 text-xs leading-relaxed text-amber-200">
           Tried every server and none loaded. The title may be region-blocked or missing
           everywhere right now.{' '}
           <button
@@ -456,8 +474,8 @@ export default function Player({
           </button>
         </div>
       ) : (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <p className="flex-1 text-xs leading-relaxed text-white/35">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-white/30">
             Auto-switches when a server fails to load. If the player loads but shows its
             own error, use “Try next server”.
           </p>
@@ -467,7 +485,7 @@ export default function Player({
                 autoAdvance();
                 persist();
               }}
-              className="rounded-full bg-accent/15 px-4 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25"
+              className="shrink-0 rounded-full bg-accent/15 px-4 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25"
             >
               Try {nextName} →
             </button>

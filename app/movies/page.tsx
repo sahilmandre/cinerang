@@ -1,6 +1,7 @@
 import { tmdb } from '@/lib/tmdb';
 import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
+import PageHeader from '@/components/PageHeader';
 import LoadError from '@/components/LoadError';
 
 // One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
@@ -27,11 +28,8 @@ export default async function MoviesPage() {
     return <LoadError title="Could not load Movies" retryHref="/movies" />;
   }
   return (
-    <div className="mt-6">
-      <div className="flex items-center gap-2.5">
-        <span className="h-6 w-1 rounded-full bg-gradient-to-b from-accent to-emerald-500" />
-        <h1 className="text-2xl font-extrabold tracking-tight">Movies</h1>
-      </div>
+    <div className="mt-8">
+      <PageHeader title="Movies" />
       <Row title="Hollywood (English)" items={hollywood.results ?? []} type="movie" href="/browse/hollywood" />
       <Row title="Bollywood (Hindi)" items={hindi.results ?? []} type="movie" href="/browse/hindi" />
       <Row title="Tollywood (Telugu)" items={telugu.results ?? []} type="movie" href="/browse/tollywood" />
