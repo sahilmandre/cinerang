@@ -93,8 +93,12 @@ export default function RecommendedRow({
         <div className="mb-3.5 flex items-center gap-3 px-1">
           <div className="h-5 w-48 rounded bg-white/10 shimmer" />
         </div>
-        <div className="no-scrollbar flex gap-3.5 overflow-x-auto px-4 pb-2 md:gap-4">
-          {[0, 1, 2, 3, 4].map((i) => (
+        {/* Same strip geometry as the loaded row below (`-mx-4` + `px-4`),
+            and enough cards to overflow it, so the skeleton is clipped at
+            the container edge like the real strip instead of stopping at
+            ~70% of the width and leaving a hole. */}
+        <div className="no-scrollbar -mx-4 flex gap-3.5 overflow-hidden px-4 pb-2 md:gap-4">
+          {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="w-[136px] shrink-0 sm:w-[148px] md:w-[160px]">
               <div className="aspect-[2/3] rounded-2xl bg-white/5 shimmer" />
               <div className="mt-2 h-3 w-32 rounded bg-white/5 shimmer" />
