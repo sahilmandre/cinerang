@@ -88,6 +88,7 @@ export default function Row({
               item={m}
               forceType={type}
               markAdult={markAdult}
+              matchReason={m.matchReason}
             />
           ))}
         </div>

@@ -83,3 +83,43 @@ export function genreSlug(type: 'movie' | 'tv', id: number): string | null {
   const list = type === 'movie' ? MOVIE_GENRES : TV_GENRES;
   return list.find((g) => g.id === id)?.slug ?? null;
 }
+
+/**
+ * Genre crosswalk between the movie and TV taxonomies.
+ *
+ * TMDB uses different ids for the same idea — films tag "Sci-Fi" (878) and
+ * "Fantasy" (14) separately, series tag both as "Sci-Fi & Fantasy" (10765)
+ * — so a movie-to-series match has to be translated before the two can be
+ * compared. Used by the "More like this" resolver to pick a movie for a
+ * series (and the other way round) that actually shares its genre.
+ */
+export const MOVIE_TO_TV_GENRES: Record<number, number[]> = {
+  878: [10765], // Sci-Fi
+  14: [10765], // Fantasy
+  28: [10759], // Action
+  12: [10759], // Adventure
+  53: [9648], // Thriller -> Mystery
+  9648: [9648], // Mystery
+  18: [18], // Drama
+  35: [35], // Comedy
+  80: [80], // Crime
+  16: [16], // Animation
+  99: [99], // Documentary
+  10751: [10751], // Family
+  10749: [18], // Romance -> Drama (TV has no romance genre)
+  27: [9648], // Horror -> Mystery
+  10752: [10759], // War -> Action & Adventure
+  37: [10759], // Western -> Action & Adventure
+};
+
+export const TV_TO_MOVIE_GENRES: Record<number, number[]> = {
+  10765: [878, 14], // Sci-Fi & Fantasy
+  10759: [28, 12], // Action & Adventure
+  9648: [9648, 53], // Mystery
+  18: [18], // Drama
+  35: [35], // Comedy
+  80: [80], // Crime
+  16: [16], // Animation
+  99: [99], // Documentary
+  10751: [10751], // Family
+};

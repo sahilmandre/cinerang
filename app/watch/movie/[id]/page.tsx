@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
+import { getRelatedTitles } from '@/lib/related';
+import RelatedCrossRow from '@/components/watch/RelatedCrossRow';
 import Player from '@/components/Player';
 import DownloadBox from '@/components/DownloadBox';
 import Row from '@/components/Row';
@@ -38,6 +41,9 @@ export default async function WatchMovie({ params }: { params: { id: string } })
     return <LoadError title="Could not load this title" retryHref={`/watch/movie/${params.id}`} />;
   const adult = isAdultTitle(d);
   const trailer = d.videos?.results?.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
+  // Blends TMDB's `similar` + `recommendations` and re-ranks them against
+  // this film's genres, so the row shows genuinely comparable titles.
+  const related = await getRelatedTitles(d, 'movie', { limit: 18 });
   return (
     <div className="pb-2">
       <TitleHeader
@@ -97,7 +103,16 @@ export default async function WatchMovie({ params }: { params: { id: string } })
           text={(d.credits?.cast ?? []).slice(0, 8).map((c: any) => c.name).join(', ')}
         />
         <div className="min-w-0 lg:col-span-3">
-          <Row title="More like this" items={(d.similar?.results ?? []).slice(0, 15)} type="movie" />
+          <Row title="More like this" items={related} type="movie" />
+        </div>
+        <div className="min-w-0 lg:col-span-3">
+          <Suspense fallback={null}>
+            <RelatedCrossRow
+              details={d}
+              type="movie"
+              title="Series with a similar vibe"
+            />
+          </Suspense>
         </div>
       </div>
     </div>

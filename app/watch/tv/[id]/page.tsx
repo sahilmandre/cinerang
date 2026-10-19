@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
+import { getRelatedTitles } from '@/lib/related';
+import RelatedCrossRow from '@/components/watch/RelatedCrossRow';
 import Player from '@/components/Player';
 import DownloadBox from '@/components/DownloadBox';
 import Row from '@/components/Row';
@@ -58,9 +61,12 @@ export default async function WatchTV({
     (s: any) => s.season_number > 0
   );
   // Independent calls — fetch together instead of sequentially.
-  const [seasonData, ext] = await Promise.all([
+  const [seasonData, ext, related] = await Promise.all([
     tmdb.seasonDetails(params.id, season).catch(() => null),
     tmdb.tvExternalIds(params.id).catch(() => null),
+    // Blends TMDB's `similar` + `recommendations` and re-ranks them against
+    // this series' genres, so the row shows genuinely comparable shows.
+    getRelatedTitles(d, 'tv', { limit: 18 }),
   ]);
   const episodeCount: number | undefined = seasonData?.episodes?.length;
   return (
@@ -234,7 +240,12 @@ export default async function WatchTV({
           clamp
         />
         <div className="min-w-0 lg:col-span-3">
-          <Row title="More like this" items={(d.similar?.results ?? []).slice(0, 15)} type="tv" />
+          <Row title="More like this" items={related} type="tv" />
+        </div>
+        <div className="min-w-0 lg:col-span-3">
+          <Suspense fallback={null}>
+            <RelatedCrossRow details={d} type="tv" title="Movies with a similar vibe" />
+          </Suspense>
         </div>
       </div>
     </div>

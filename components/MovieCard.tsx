@@ -17,6 +17,8 @@ export interface TMDBItem {
   genre_ids?: number[];
   release_date?: string;
   first_air_date?: string;
+  /** Why this title is in the row — shared genres, shown under the title. */
+  matchReason?: string;
 }
 
 export function mediaTypeOf(item: TMDBItem, fallback: 'movie' | 'tv' = 'movie') {

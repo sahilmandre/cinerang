@@ -115,10 +115,33 @@ export const tmdb = {
     tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
   search: (q: string, page = 1) =>
     tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false&page=${page}`, TTL.search),
+  // `recommendations` is appended next to `similar` because the two are
+  // near-orthogonal: `similar` is the tight but obscure cluster (and is
+  // empty for ~40% of titles), `recommendations` is the popular, better
+  // rated twin. Both ride the one cached details call, so the extra
+  // payload is free at request time.
   movieDetails: (id: string) =>
-    tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar,keywords`, TTL.details),
+    tmdbFetch(`/movie/${id}?append_to_response=videos,credits,similar,recommendations,keywords`, TTL.details),
   tvDetails: (id: string) =>
-    tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar,keywords`, TTL.details),
+    tmdbFetch(`/tv/${id}?append_to_response=videos,credits,similar,recommendations,keywords`, TTL.details),
+  movieRecommendations: (id: string) => tmdbFetch(`/movie/${id}/recommendations`, TTL.details),
+  tvRecommendations: (id: string) => tmdbFetch(`/tv/${id}/recommendations`, TTL.details),
+  // Keyword ids live in one namespace shared by movies and series, so a
+  // series' keyword finds films with the same theme and vice versa. One
+  // keyword per call: TMDB treats `with_keywords=a,b` as AND, which
+  // over-narrows to almost nothing.
+  discoverByKeyword: (type: 'movie' | 'tv', keywordId: number, page = 1) =>
+    tmdbFetch(
+      `/discover/${type}?with_keywords=${keywordId}&sort_by=popularity.desc&include_adult=false&page=${page}`,
+      TTL.catalog
+    ),
+  // Single genre id on purpose — a comma list is an AND filter, which
+  // over-narrows and degrades the popularity sort.
+  discoverByGenre: (type: 'movie' | 'tv', genreId: number, page = 1) =>
+    tmdbFetch(
+      `/discover/${type}?with_genres=${genreId}&sort_by=popularity.desc&include_adult=false&page=${page}`,
+      TTL.catalog
+    ),
   seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`, TTL.season),
   tvExternalIds: (id: string) => tmdbFetch(`/tv/${id}/external_ids`, TTL.details),
   moviesByLang: (lang: string, page = 1) =>
