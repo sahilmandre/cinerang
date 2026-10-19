@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { tmdb } from '@/lib/tmdb';
+import { tmdb, hindiOtt } from '@/lib/tmdb';
 import {
   scoreTitles,
   diversifyTitles,
@@ -89,7 +89,9 @@ async function fetchCandidates(
       tasks.push(quiet(tmdb.genreTV(genre, randomPage())));
     }
     tasks.push(
-      quiet(tmdb.tvByLang('hi', randomPage())),
+      // Hindi series candidates come from the OTT-only source so the
+      // recommender never suggests legacy linear-TV serials.
+      quiet(hindiOtt.page(randomPage())),
       quiet(tmdb.tvByLang('ko', randomPage())),
       quiet(tmdb.popularTV(randomPage())),
       quiet(tmdb.trending('tv', randomPage()))

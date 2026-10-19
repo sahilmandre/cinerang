@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { tmdb } from '@/lib/tmdb';
+import { tmdb, hindiOtt } from '@/lib/tmdb';
 
 /**
  * Returns diverse movie or series candidates for the taste quiz.
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
           quiet(tmdb.moviesByLang('ko', randomPage())),
         ]
       : [
-          quiet(tmdb.tvByLang('hi', randomPage())),
+          quiet(hindiOtt.page(randomPage())),
           quiet(tmdb.tvByLang('ko', randomPage())),
         ];
 

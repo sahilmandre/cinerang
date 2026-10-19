@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { tmdb } from '@/lib/tmdb';
+import { tmdb, hindiOtt } from '@/lib/tmdb';
 import AdultGate from '@/components/AdultGate';
 import LoadError from '@/components/LoadError';
 import PageHeader from '@/components/PageHeader';
@@ -37,7 +37,18 @@ const CATEGORIES: Record<string, Category> = {
   tollywood: { title: 'Tollywood (Telugu)', type: 'movie', load: (p) => tmdb.moviesByLang('te', p) },
   tamil: { title: 'Tamil', type: 'movie', load: (p) => tmdb.moviesByLang('ta', p) },
   'tv-english': { title: 'English TV Series', type: 'tv', load: (p) => tmdb.tvByLang('en', p) },
-  'tv-hindi': { title: 'Hindi TV Series', type: 'tv', load: (p) => tmdb.tvByLang('hi', p) },
+  // Hindi series made for an OTT platform (Netflix, Prime Video, JioHotstar,
+  // Zee5, SonyLIV, MX Player, ALTBalaji, ...) — not legacy linear-TV soaps.
+  'tv-hindi': {
+    title: 'Hindi OTT Series',
+    type: 'tv',
+    load: (p) => hindiOtt.page(p),
+  },
+  'tv-hindi-top': {
+    title: 'Top Rated Hindi Series',
+    type: 'tv',
+    load: (p) => hindiOtt.page(p, 'vote_average'),
+  },
   'tv-korean': { title: 'Korean TV Series', type: 'tv', load: (p) => tmdb.tvByLang('ko', p) },
   // Movie genre sub-categories
   'movie-action': { title: 'Action Movies', type: 'movie', load: (p) => tmdb.genreMovies(28, p) },

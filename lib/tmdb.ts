@@ -1,3 +1,5 @@
+import { fetchHindiOttPage } from './hindiOtt';
+
 export const TMDB_IMAGE = 'https://image.tmdb.org/t/p';
 // Prefer server-only secrets (never bundled to the browser); fall back
 // to the NEXT_PUBLIC_* values for backwards compatibility.
@@ -85,6 +87,17 @@ async function tmdbFetch(path: string, revalidate = TTL.catalog) {
     throw lastErr;
   });
 }
+
+/**
+ * Discovers Hindi series made *for* an OTT platform (Netflix, Prime Video,
+ * JioHotstar, Zee5, SonyLIV, MX Player, ALTBalaji, ...) instead of the
+ * legacy linear-TV serials that dominate a plain `with_original_language=hi`
+ * query. See lib/hindiOtt.ts for the network ids and filter rationale.
+ */
+export const hindiOtt = {
+  page: (page = 1, sort: 'popularity' | 'vote_average' = 'popularity') =>
+    fetchHindiOttPage((p) => tmdbFetch(p, TTL.catalog), page, sort),
+};
 
 export const tmdb = {
   trending: (type: 'movie' | 'tv' | 'all' = 'all', page = 1) =>
