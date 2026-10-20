@@ -13,7 +13,7 @@ Streaming UI like `cinejoy.pk/watch/movie/350` — TMDB for catalog + multi-serv
 ```bash
 npm install
 cp .env.example .env.local
-# add NEXT_PUBLIC_TMDB_API_KEY from https://www.themoviedb.org/settings/api
+# add TMDB_ACCESS_TOKEN (or TMDB_API_KEY) from https://www.themoviedb.org/settings/api
 npm run dev
 ```
 Open http://localhost:3000

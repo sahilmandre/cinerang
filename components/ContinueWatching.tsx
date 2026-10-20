@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Play, X } from 'lucide-react';
 import { getContinue, removeContinue, clearContinue, ContinueItem } from '@/lib/storage';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 
 export default function ContinueWatching() {
   const [items, setItems] = useState<ContinueItem[]>([]);
@@ -54,7 +54,11 @@ export default function ContinueWatching() {
             className="group relative w-[148px] shrink-0 sm:w-[160px] md:w-[170px]"
           >
             <Link
-              href={`/watch/${c.mediaType}/${c.id}`}
+              href={
+                c.mediaType === 'tv'
+                  ? `/watch/tv/${c.id}?s=${c.season ?? 1}&e=${c.episode ?? 1}`
+                  : `/watch/movie/${c.id}`
+              }
               aria-label={`Resume ${c.title}`}
               className="block overflow-hidden rounded-2xl bg-card/70 shadow-card transition duration-300 hover:-translate-y-1.5 hover:bg-card hover:shadow-glow hover:ring-1 hover:ring-accent/50 focus-visible:-translate-y-1.5 focus-visible:ring-1 focus-visible:ring-accent/50"
             >

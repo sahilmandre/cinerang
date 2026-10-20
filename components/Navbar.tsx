@@ -11,7 +11,7 @@ import {
   Tv,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import LiveSearch from './LiveSearch';
 import NavLinks from './NavLinks';
 import { cn } from '@/lib/utils';
@@ -71,6 +71,20 @@ function BottomTabs() {
 
 export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false);
+  const pathname = usePathname();
+
+  // The expanded search only exists below `lg`. Close it after navigating
+  // (picking a result) and when the viewport grows past `lg` (e.g. tablet
+  // rotation) — otherwise the header renders empty with no way back.
+  useEffect(() => setSearchOpen(false), [pathname]);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => {
+      if (desktop.matches) setSearchOpen(false);
+    };
+    desktop.addEventListener('change', onChange);
+    return () => desktop.removeEventListener('change', onChange);
+  }, []);
 
   return (
     <>

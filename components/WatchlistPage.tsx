@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import MovieCard from '@/components/MovieCard';
 import {
-  WATCHLIST_EVENT,
   getWatchlist,
-  toggleWatchlist,
+  removeFromWatchlist,
+  subscribeWatchlist,
   type ContinueItem,
 } from '@/lib/storage';
 import { cn } from '@/lib/utils';
@@ -16,13 +16,16 @@ type WatchlistFilter = 'all' | 'movie' | 'tv';
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<ContinueItem[]>([]);
+  // False until localStorage is read, so saved titles don't flash the
+  // "empty" message first.
+  const [hydrated, setHydrated] = useState(false);
   const [filter, setFilter] = useState<WatchlistFilter>('all');
 
   useEffect(() => {
     const load = () => setItems(getWatchlist());
     load();
-    window.addEventListener(WATCHLIST_EVENT, load);
-    return () => window.removeEventListener(WATCHLIST_EVENT, load);
+    setHydrated(true);
+    return subscribeWatchlist(load);
   }, []);
 
   const filtered = useMemo(
@@ -31,7 +34,7 @@ export default function WatchlistPage() {
   );
 
   const remove = (item: ContinueItem) => {
-    toggleWatchlist(item);
+    removeFromWatchlist(item.id, item.mediaType);
     setItems(getWatchlist());
   };
 
@@ -69,7 +72,13 @@ export default function WatchlistPage() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {!hydrated ? (
+        <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="shimmer aspect-[2/3] rounded-2xl bg-white/5" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="mt-8 rounded-2xl glass p-6 text-center">
           <p className="text-sm text-white/60">
             {items.length === 0

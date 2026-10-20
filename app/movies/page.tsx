@@ -4,6 +4,9 @@ import ContinueWatching from '@/components/ContinueWatching';
 import PageHeader from '@/components/PageHeader';
 import LoadError from '@/components/LoadError';
 
+// Heal outage-degraded renders within 5 minutes (see app/page.tsx).
+export const revalidate = 300;
+
 // One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
 // instead of failing the whole page.
 const empty = { results: [] as any[] };

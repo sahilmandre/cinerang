@@ -61,7 +61,7 @@ export default function Row({
             type="button"
             onClick={() => scrollBy(-1)}
             aria-label={`Scroll ${title} left`}
-            className="pointer-events-auto ml-1 grid h-10 w-10 -translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white group-hover/row:translate-x-0 group-hover/row:opacity-100"
+            className="pointer-events-auto ml-1 grid h-10 w-10 -translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white focus-visible:translate-x-0 focus-visible:opacity-100 group-hover/row:translate-x-0 group-hover/row:opacity-100"
           >
             <ChevronLeft size={18} />
           </button>
@@ -69,7 +69,7 @@ export default function Row({
             type="button"
             onClick={() => scrollBy(1)}
             aria-label={`Scroll ${title} right`}
-            className="pointer-events-auto mr-1 grid h-10 w-10 translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white group-hover/row:translate-x-0 group-hover/row:opacity-100"
+            className="pointer-events-auto mr-1 grid h-10 w-10 translate-x-2 place-items-center rounded-full glass text-white/80 opacity-0 shadow-xl transition duration-300 hover:bg-[#16211a] hover:text-white focus-visible:translate-x-0 focus-visible:opacity-100 group-hover/row:translate-x-0 group-hover/row:opacity-100"
           >
             <ChevronRight size={18} />
           </button>

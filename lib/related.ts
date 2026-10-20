@@ -541,7 +541,10 @@ export async function getCrossTitles(
   const keywords = pickKeywords(source);
   const other: RelatedMedia = type === 'movie' ? 'tv' : 'movie';
   const weights = crossTypeWeights(type, other, source.genres);
-  const targetGenres = Array.from(weights.keys());
+  // Most distinctive first, so the slice below queries the right two.
+  const targetGenres = Array.from(weights.keys()).sort(
+    (a, b) => (weights.get(b) ?? 0) - (weights.get(a) ?? 0)
+  );
   if (targetGenres.length === 0) return [];
 
   const crossPools: { origin: Origin; items: any[] }[] = [];

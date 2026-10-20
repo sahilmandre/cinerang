@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { tmdb, hindiOtt } from '@/lib/tmdb';
 import AdultGate from '@/components/AdultGate';
@@ -107,7 +107,8 @@ export default async function BrowsePage({
 }) {
   const cat = CATEGORIES[params.slug];
   if (!cat) notFound();
-  const page = Math.min(Math.max(Number(searchParams.page) || 1, 1), 500);
+  // Floored: TMDB rejects fractional pages with a 400.
+  const page = Math.min(Math.max(Math.floor(Number(searchParams.page)) || 1, 1), 500);
   let data: { results: TMDBItem[]; total_pages: number };
   try {
     data = await cat.load(page);
@@ -120,6 +121,8 @@ export default async function BrowsePage({
     );
   }
   const totalPages = Math.min(data.total_pages ?? 1, 500);
+  // Past the last page TMDB returns an empty list — send the user to the end.
+  if (totalPages > 0 && page > totalPages) redirect(`/browse/${params.slug}?page=${totalPages}`);
 
   const pageLink = (p: number) => `/browse/${params.slug}?page=${p}`;
   const neighbours = [page - 2, page - 1, page, page + 1, page + 2].filter((p) => p >= 1 && p <= totalPages);
@@ -129,7 +132,7 @@ export default async function BrowsePage({
       <PageHeader
         title={cat.title}
         tone={cat.adultOnly ? 'danger' : 'accent'}
-        count={`Page ${page} of ${totalPages}`}
+        count={totalPages > 0 ? `Page ${page} of ${totalPages}` : undefined}
       >
         {cat.adultOnly ? (
           <span className="rounded-md border border-red-400/50 bg-red-500/10 px-2 py-0.5 text-xs font-extrabold text-red-300">
@@ -145,7 +148,13 @@ export default async function BrowsePage({
         </p>
       ) : null}
 
-      <BrowseGrid items={data.results ?? []} type={cat.type} adultOnly={cat.adultOnly} />
+      {(data.results ?? []).some((m) => m.poster_path) ? (
+        <BrowseGrid items={data.results ?? []} type={cat.type} adultOnly={cat.adultOnly} />
+      ) : (
+        <p className="mt-8 rounded-2xl glass p-6 text-center text-sm text-white/60">
+          Nothing in this category right now.
+        </p>
+      )}
 
       {totalPages > 1 && (
         <nav aria-label="Browse pages" className="mt-10 flex flex-wrap items-center justify-center gap-2">

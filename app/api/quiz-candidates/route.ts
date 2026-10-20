@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { tmdb, hindiOtt } from '@/lib/tmdb';
+import { TMDB_MOVIE_GENRES, TMDB_TV_GENRES } from '@/lib/categories';
+
+const MOVIE_IDS = new Set(TMDB_MOVIE_GENRES.map((g) => g.id));
+const TV_IDS = new Set(TMDB_TV_GENRES.map((g) => g.id));
 
 /**
  * Returns diverse movie or series candidates for the taste quiz.
@@ -7,7 +11,7 @@ import { tmdb, hindiOtt } from '@/lib/tmdb';
  * Query params:
  *   media    - "movie" (default) or "tv"
  *   genres   - comma-separated TMDB genre ids to draw from
- *   exclude  - comma-separated title ids already shown/liked (capped at 300)
+ *   exclude  - comma-separated title ids already shown/liked (capped at 600)
  *   count    - how many candidates to return (default 12, max 30)
  *
  * Each response mixes up to 4 shuffled genre pools, mainstream popularity,
@@ -50,18 +54,24 @@ export async function GET(req: Request) {
   const media: 'movie' | 'tv' =
     searchParams.get('media') === 'tv' ? 'tv' : 'movie';
 
-  const genreIds = (searchParams.get('genres') ?? '')
-    .split(',')
-    .map(Number)
-    .filter((n) => Number.isFinite(n) && n > 0);
+  // Only real genre ids for this media type — anything else would fan out
+  // into wasted (and separately cached) TMDB discover calls.
+  const validGenres = media === 'movie' ? MOVIE_IDS : TV_IDS;
+  const genreIds = Array.from(
+    new Set(
+      (searchParams.get('genres') ?? '')
+        .split(',', 50)
+        .map(Number)
+        .filter((n) => validGenres.has(n))
+    )
+  );
 
   // Hard cap — keeps param parsing and the exclude set bounded.
   const exclude = new Set(
     (searchParams.get('exclude') ?? '')
-      .split(',')
-      .slice(0, 300)
+      .split(',', 600)
       .map(Number)
-      .filter((n) => Number.isFinite(n) && n > 0)
+      .filter((n) => Number.isInteger(n) && n > 0)
   );
 
   const count = Math.min(
@@ -140,9 +150,12 @@ export async function GET(req: Request) {
     byPool.push(items);
   }
 
-  // Round-robin across pools so candidates mix genres/regions evenly.
+  // Round-robin across pools so candidates mix genres/regions evenly. There
+  // are usually more pools (4 genre + 2 regional + mainstream) than slots,
+  // so start at a random pool — a fixed start would always stop before the
+  // Korean and mainstream pools.
   const merged: QuizCandidate[] = [];
-  let idx = 0;
+  let idx = Math.floor(Math.random() * byPool.length);
   while (merged.length < count && byPool.some((p) => p.length > 0)) {
     const pool = byPool[idx % byPool.length];
     const next = pool.shift();

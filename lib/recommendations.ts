@@ -23,6 +23,7 @@ export interface CandidateTitle {
   title: string;
   poster_path: string | null;
   vote_average?: number;
+  vote_count?: number;
   popularity?: number;
   genre_ids: number[];
   release_date?: string;
@@ -152,10 +153,22 @@ function languageAffinity(
   return value > 0 ? value / best : 0;
 }
 
+// Bayesian shrinkage: a rating backed by few votes is pulled toward a
+// neutral prior, so a 10.0 from two votes can't outrank a well-reviewed film.
+const PRIOR_VOTES = 50;
+const PRIOR_RATING = 6;
+
+/** Rating adjusted for vote count; unknown counts are taken at face value. */
+function confidentRating(voteAverage: number, voteCount?: number): number {
+  if (voteCount == null || !Number.isFinite(voteCount)) return voteAverage;
+  const votes = Math.max(0, voteCount);
+  return (votes * voteAverage + PRIOR_VOTES * PRIOR_RATING) / (votes + PRIOR_VOTES);
+}
+
 /** Fixed 5.0–8.5 quality scale, so niche and mainstream titles compare fairly. */
-function qualityScore(voteAverage?: number): number {
+function qualityScore(voteAverage?: number, voteCount?: number): number {
   if (voteAverage == null || !Number.isFinite(voteAverage)) return 0.35;
-  return clamp01((voteAverage - 5) / 3.5);
+  return clamp01((confidentRating(voteAverage, voteCount) - 5) / 3.5);
 }
 
 /** Familiarity only — popularity must not override genre/language affinity. */
@@ -231,7 +244,7 @@ export function scoreTitles(
 
       const earned =
         affinity * GENRE_POINTS +
-        qualityScore(title.vote_average) * QUALITY_POINTS +
+        qualityScore(title.vote_average, title.vote_count) * QUALITY_POINTS +
         familiarityScore(title.popularity) * FAMILIARITY_POINTS +
         recencyScore(title.release_date) * RECENCY_POINTS +
         languageMatch * (hasLanguageProfile ? LANGUAGE_POINTS : 0);
@@ -251,7 +264,9 @@ export function scoreTitles(
         .filter((name): name is string => Boolean(name));
       if (matchedNames.length > 0) reasons.push(matchedNames.join(', '));
 
-      if ((title.vote_average ?? 0) >= 7.5) reasons.push('Highly rated');
+      if ((title.vote_average ?? 0) >= 7.5 && (title.vote_count ?? PRIOR_VOTES) >= PRIOR_VOTES) {
+        reasons.push('Highly rated');
+      }
 
       return {
         ...title,

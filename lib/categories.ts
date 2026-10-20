@@ -108,8 +108,8 @@ export const MOVIE_TO_TV_GENRES: Record<number, number[]> = {
   10751: [10751], // Family
   10749: [18], // Romance -> Drama (TV has no romance genre)
   27: [9648], // Horror -> Mystery
-  10752: [10759], // War -> Action & Adventure
-  37: [10759], // Western -> Action & Adventure
+  10752: [10768], // War -> War & Politics
+  37: [37], // Western (same id on both)
 };
 
 export const TV_TO_MOVIE_GENRES: Record<number, number[]> = {
@@ -122,4 +122,7 @@ export const TV_TO_MOVIE_GENRES: Record<number, number[]> = {
   16: [16], // Animation
   99: [99], // Documentary
   10751: [10751], // Family
+  37: [37], // Western
+  10768: [10752, 36], // War & Politics -> War, History
+  10762: [10751, 16], // Kids -> Family, Animation
 };

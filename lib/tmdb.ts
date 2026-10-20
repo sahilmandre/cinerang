@@ -1,10 +1,32 @@
 import { fetchHindiOttPage } from './hindiOtt';
 
-export const TMDB_IMAGE = 'https://image.tmdb.org/t/p';
+export { TMDB_IMAGE, poster } from './tmdb-image';
 // Prefer server-only secrets (never bundled to the browser); fall back
-// to the NEXT_PUBLIC_* values for backwards compatibility.
-const API_KEY = process.env.TMDB_API_KEY ?? process.env.NEXT_PUBLIC_TMDB_API_KEY;
-const TOKEN = process.env.TMDB_ACCESS_TOKEN ?? process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN;
+// to the NEXT_PUBLIC_* values for backwards compatibility. `||`, not `??`:
+// a blank `TMDB_API_KEY=` line (as in .env.example) loads as "" and must
+// still fall through to the public value.
+const API_KEY =
+  process.env.TMDB_API_KEY?.trim() || process.env.NEXT_PUBLIC_TMDB_API_KEY?.trim();
+const TOKEN =
+  process.env.TMDB_ACCESS_TOKEN?.trim() || process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN?.trim();
+
+/** True when server-side TMDB calls have a credential to send. */
+export const hasTmdbCredentials = Boolean(API_KEY || TOKEN);
+
+/** True for TMDB's "this id doesn't exist" — a 404, not a network failure. */
+export const isTmdbNotFound = (e: unknown) =>
+  e instanceof Error && e.message.startsWith('TMDB error 404');
+
+// 18+ producers whose catalogs are mature by brand (verified Oct 2026).
+const ADULT_COMPANIES = new Set([149142, 173083, 134066]); // Vivamax, Vivamax Original Series, Ullu
+// TMDB "erotic" keyword used for the 18+ movie/series rows.
+const ADULT_KEYWORDS = new Set([256466]);
+// Keeps those titles out of the main catalog's discover lists (TMDB flags
+// them `adult: false`, so include_adult=false alone lets them through).
+// Verified Oct 2026: removes all Vivamax/Ullu/erotic-keyword results.
+const NOT_ADULT = `without_keywords=${Array.from(ADULT_KEYWORDS).join(',')}&without_companies=${Array.from(
+  ADULT_COMPANIES
+).join(',')}`;
 
 const FETCH_TIMEOUT_MS = 12000;
 const MAX_ATTEMPTS = 4;
@@ -46,7 +68,7 @@ async function tmdbFetch(path: string, revalidate = TTL.catalog) {
   } else if (API_KEY) {
     finalUrl += `&api_key=${API_KEY}`;
   } else {
-    throw new Error('Missing TMDB credentials: set NEXT_PUBLIC_TMDB_API_KEY or NEXT_PUBLIC_TMDB_ACCESS_TOKEN');
+    throw new Error('Missing TMDB credentials: set TMDB_ACCESS_TOKEN or TMDB_API_KEY');
   }
   // Retry with exponential backoff + jitter: TMDB (or middleboxes/VPNs on
   // some networks) intermittently reset TLS connections (ECONNRESET), and
@@ -75,7 +97,8 @@ async function tmdbFetch(path: string, revalidate = TTL.catalog) {
         // Deterministic client errors (bad key, unknown id, bad params)
         // never succeed on retry — fail fast instead of stalling ~12s.
         if (!res.ok) throw new Error(`TMDB error ${res.status} for ${path}`);
-        return res.json();
+        // Awaited so a body read/parse failure (mid-body reset) is retried.
+        return await res.json();
       } catch (e) {
         if (e instanceof Error && /^TMDB error 4\d\d/.test(e.message)) throw e;
         lastErr = e;
@@ -106,13 +129,13 @@ export const tmdb = {
   popularTV: (page = 1) => tmdbFetch(`/tv/popular?page=${page}`, TTL.trending),
   topRatedMovies: (page = 1) => tmdbFetch(`/movie/top_rated?page=${page}`, TTL.trending),
   anime: (page = 1) =>
-    tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   bollywood: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/movie?with_original_language=hi&region=IN&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   southTamil: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/movie?with_original_language=ta&region=IN&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   southTelugu: (page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/movie?with_original_language=te&region=IN&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   search: (q: string, page = 1) =>
     tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false&page=${page}`, TTL.search),
   // `recommendations` is appended next to `similar` because the two are
@@ -132,26 +155,26 @@ export const tmdb = {
   // over-narrows to almost nothing.
   discoverByKeyword: (type: 'movie' | 'tv', keywordId: number, page = 1) =>
     tmdbFetch(
-      `/discover/${type}?with_keywords=${keywordId}&sort_by=popularity.desc&include_adult=false&page=${page}`,
+      `/discover/${type}?with_keywords=${keywordId}&sort_by=popularity.desc&include_adult=false&${NOT_ADULT}&page=${page}`,
       TTL.catalog
     ),
   // Single genre id on purpose — a comma list is an AND filter, which
   // over-narrows and degrades the popularity sort.
   discoverByGenre: (type: 'movie' | 'tv', genreId: number, page = 1) =>
     tmdbFetch(
-      `/discover/${type}?with_genres=${genreId}&sort_by=popularity.desc&include_adult=false&page=${page}`,
+      `/discover/${type}?with_genres=${genreId}&sort_by=popularity.desc&include_adult=false&${NOT_ADULT}&page=${page}`,
       TTL.catalog
     ),
   seasonDetails: (id: string, s: number) => tmdbFetch(`/tv/${id}/season/${s}`, TTL.season),
   tvExternalIds: (id: string) => tmdbFetch(`/tv/${id}/external_ids`, TTL.details),
   moviesByLang: (lang: string, page = 1) =>
-    tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/movie?with_original_language=${lang}&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   tvByLang: (lang: string, page = 1) =>
-    tmdbFetch(`/discover/tv?with_original_language=${lang}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/tv?with_original_language=${lang}&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   genreMovies: (genreId: number, page = 1) =>
-    tmdbFetch(`/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   genreTV: (genreId: number, page = 1) =>
-    tmdbFetch(`/discover/tv?with_genres=${genreId}&sort_by=popularity.desc&page=${page}`, TTL.catalog),
+    tmdbFetch(`/discover/tv?with_genres=${genreId}&sort_by=popularity.desc&${NOT_ADULT}&page=${page}`, TTL.catalog),
   // 18+ / mature discovery. Verified Oct 2026 against the live API:
   // popularity-sorted discover with include_adult=true returns 0/20
   // `adult`-flagged items (TMDB barely uses the flag), so these lists
@@ -181,13 +204,6 @@ export const tmdb = {
     tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=true&page=${page}`, TTL.search),
 };
 
-export const poster = (path: string | null, size = 'w500') =>
-  path ? `${TMDB_IMAGE}/${size}${path}` : '/placeholder.svg';
-
-// 18+ producers whose catalogs are mature by brand (verified Oct 2026).
-const ADULT_COMPANIES = new Set([149142, 173083, 134066]); // Vivamax, Vivamax Original Series, Ullu
-// TMDB "erotic" keyword used for the 18+ movie/series rows.
-const ADULT_KEYWORDS = new Set([256466]);
 
 /**
  * True when a details object is an 18+ title. TMDB's `adult` flag alone

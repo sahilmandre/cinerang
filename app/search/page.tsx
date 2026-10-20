@@ -3,16 +3,20 @@ import { SearchX } from 'lucide-react';
 import { tmdb } from '@/lib/tmdb';
 import PageHeader from '@/components/PageHeader';
 import MovieCard from '@/components/MovieCard';
+import LoadError from '@/components/LoadError';
 
 const SUGGESTIONS = ['Avengers', 'Breaking Bad', 'Naruto', 'Dune', 'Money Heist'];
 
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string };
+  searchParams: { q?: string | string[] };
 }) {
-  const q = (searchParams.q ?? '').trim();
+  // `?q=a&q=b` arrives as an array — take the first instead of crashing.
+  const rawQ = Array.isArray(searchParams.q) ? searchParams.q[0] : searchParams.q;
+  const q = (rawQ ?? '').trim();
   let results: any[] = [];
+  let failed = false;
   if (q) {
     try {
       const data = await tmdb.search(q);
@@ -20,8 +24,14 @@ export default async function SearchPage({
         (r: any) => r.poster_path && (r.media_type === 'movie' || r.media_type === 'tv')
       );
     } catch {
-      /* error UI below */
+      failed = true;
     }
+  }
+  // An outage must not read as "this title doesn't exist".
+  if (failed) {
+    return (
+      <LoadError title="Search is unavailable right now" retryHref={`/search?q=${encodeURIComponent(q)}`} />
+    );
   }
 
   return (

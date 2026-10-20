@@ -45,7 +45,26 @@ async function fetchLink(type: string, id: string, s: string | null, e: string |
   });
   if (!res.ok) return null;
   const data = await res.json().catch(() => null);
-  return typeof data?.url === 'string' ? (data.url as string) : null;
+  return typeof data?.url === 'string' && isAllowedFileUrl(data.url) ? (data.url as string) : null;
+}
+
+/**
+ * The file URL comes from upstream JSON and is fetched server-side, so it
+ * must not be able to point this server at internal addresses (SSRF).
+ * Only HTTPS on the known file hosts is accepted.
+ */
+function isAllowedFileUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname.endsWith('.workers.dev') ||
+        url.hostname === 'vidvault.to' ||
+        url.hostname.endsWith('.vidvault.to'))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(req: Request) {
@@ -56,6 +75,11 @@ export async function GET(req: Request) {
   const e = u.searchParams.get('e');
   const quality = u.searchParams.get('quality');
   if (!/^\d+$/.test(id)) return NextResponse.json({ error: 'bad id' }, { status: 400 });
+  // These go into the upstream path (and the filename) verbatim.
+  if (type === 'tv' && !(/^\d{1,4}$/.test(s ?? '') && /^\d{1,4}$/.test(e ?? '')))
+    return NextResponse.json({ error: 'bad season/episode' }, { status: 400 });
+  if (quality != null && !QUALS.includes(quality))
+    return NextResponse.json({ error: 'bad quality' }, { status: 400 });
 
   // Single quality -> mint fresh signed URL, then stream the file
   // through us with the vidvault Referer (hotlink protection).

@@ -36,9 +36,6 @@ module.exports = {
           from: { opacity: '0' },
           to: { opacity: '1' },
         },
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
-        },
         'hero-zoom': {
           from: { transform: 'scale(1)' },
           to: { transform: 'scale(1.07)' },

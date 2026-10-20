@@ -9,11 +9,12 @@ import {
   isLiked,
   recordTitleDisliked,
   recordTitleLiked,
+  recordTitleUnliked,
   type TasteKind,
 } from '@/lib/preferences';
 import {
-  WATCHLIST_EVENT,
   inWatchlist,
+  subscribeWatchlist,
   toggleWatchlist,
 } from '@/lib/storage';
 import { cn } from '@/lib/utils';
@@ -50,9 +51,11 @@ export default function RecommendationCard({
   /** Lets the parent remove a liked/disliked title immediately. */
   onFeedback?: (id: number, feedback: 'like' | 'dislike') => void;
 }) {
-  const [liked, setLiked] = useState(() => isLiked(item.id, media));
-  const [disliked, setDisliked] = useState(() => isDisliked(item.id, media));
-  const [saved, setSaved] = useState(() => inWatchlist(item.id, media));
+  // Real values load in the effect below — reading localStorage during the
+  // first render would mismatch any server-rendered markup.
+  const [liked, setLiked] = useState(false);
+  const [disliked, setDisliked] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const sync = () => {
@@ -62,20 +65,27 @@ export default function RecommendationCard({
     };
     sync();
     window.addEventListener(TASTE_EVENT, sync);
-    window.addEventListener(WATCHLIST_EVENT, sync);
+    const unsubscribe = subscribeWatchlist(sync);
     return () => {
       window.removeEventListener(TASTE_EVENT, sync);
-      window.removeEventListener(WATCHLIST_EVENT, sync);
+      unsubscribe();
     };
   }, [item.id, media]);
 
+  // Toggle: a second click unlikes and takes back the signals it added.
   const like = () => {
-    recordTitleLiked({
+    const signal = {
       kind: media,
       id: item.id,
       genreIds: item.genre_ids ?? [],
       languages: item.original_language ? [item.original_language] : [],
-    });
+    };
+    if (liked) {
+      recordTitleUnliked(signal);
+      setLiked(false);
+      return;
+    }
+    recordTitleLiked(signal);
     setLiked(true);
     setDisliked(false);
     onFeedback?.(item.id, 'like');
@@ -124,8 +134,12 @@ export default function RecommendationCard({
           type="button"
           onClick={like}
           aria-pressed={liked}
-          title="Like — show more titles like this"
-          aria-label={`Like ${item.title} and show more titles like this`}
+          title={liked ? 'Liked — click to undo' : 'Like — show more titles like this'}
+          aria-label={
+            liked
+              ? `Undo like for ${item.title}`
+              : `Like ${item.title} and show more titles like this`
+          }
           className={iconButton(
             liked ? 'border-transparent bg-accent text-black shadow-lg shadow-accent/30' : null
           )}

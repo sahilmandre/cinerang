@@ -3,6 +3,9 @@ import Row from '@/components/Row';
 import AdultGate from '@/components/AdultGate';
 import PageHeader from '@/components/PageHeader';
 
+// Heal outage-degraded renders within 5 minutes (see app/page.tsx).
+export const revalidate = 300;
+
 export default async function AdultPage() {
   const [movies, tv, vivamax, ullu] = await Promise.all([
     tmdb.eroticMovies().catch(() => ({ results: [] })),

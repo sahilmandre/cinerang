@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
 import {
-  WATCHLIST_EVENT,
   inWatchlist,
+  subscribeWatchlist,
   toggleWatchlist,
 } from '@/lib/storage';
 import type { TasteKind } from '@/lib/preferences';
@@ -23,13 +23,15 @@ export default function WatchlistButton({
   poster: string | null;
   className?: string;
 }) {
-  const [saved, setSaved] = useState(() => inWatchlist(id, mediaType));
+  // Starts false to match the server render; reading localStorage here
+  // caused a hydration mismatch that re-rendered the whole watch page
+  // (reloading the player iframe). The effect loads the real value.
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const sync = () => setSaved(inWatchlist(id, mediaType));
     sync();
-    window.addEventListener(WATCHLIST_EVENT, sync);
-    return () => window.removeEventListener(WATCHLIST_EVENT, sync);
+    return subscribeWatchlist(sync);
   }, [id, mediaType]);
 
   return (

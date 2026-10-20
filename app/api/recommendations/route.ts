@@ -113,6 +113,7 @@ async function fetchCandidates(
         title: item.title ?? item.name ?? 'Unknown',
         poster_path: item.poster_path,
         vote_average: item.vote_average,
+        vote_count: item.vote_count,
         popularity: item.popularity,
         genre_ids: item.genre_ids ?? [],
         release_date: item.release_date ?? item.first_air_date,
@@ -125,9 +126,12 @@ async function fetchCandidates(
   return candidates;
 }
 
+// Bounds query parsing — real profiles stay far below this.
+const MAX_IDS = 1000;
+
 function parseIds(value: string | null): number[] {
   return (value ?? '')
-    .split(',')
+    .split(',', MAX_IDS)
     .map(Number)
     .filter((n) => Number.isInteger(n) && n > 0);
 }
@@ -138,7 +142,7 @@ function parseIds(value: string | null): number[] {
  */
 function parseScores(value: string | null): Record<string, number> {
   const scores: Record<string, number> = {};
-  for (const entry of (value ?? '').split(',')) {
+  for (const entry of (value ?? '').split(',', MAX_IDS)) {
     const [rawKey, rawScore] = entry.split(':').map((part) => part.trim());
     if (!rawKey) continue;
     const score = Number(rawScore);
@@ -158,11 +162,21 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const media: RecommendationMedia =
     searchParams.get('media') === 'tv' ? 'tv' : 'movie';
-  const favoriteGenres = parseIds(searchParams.get('favoriteGenres'));
+  const lookup = media === 'movie' ? MOVIE_LOOKUP : TV_LOOKUP;
+  // Movie-only ids (Horror, Thriller, …) never tag a series and vice versa.
+  // Left in, they inflate the scorer's total weight and deflate every match;
+  // unknown ids would also fan out into wasted TMDB discover calls.
+  const favoriteGenres = parseIds(searchParams.get('favoriteGenres')).filter((id) =>
+    lookup.has(id)
+  );
   const watchedIds = parseIds(searchParams.get('watchedIds'));
   const likedIds = parseIds(searchParams.get('likedIds'));
   const dislikedIds = parseIds(searchParams.get('dislikedIds'));
-  const genreWeights = parseScores(searchParams.get('genreWeights'));
+  const genreWeights = Object.fromEntries(
+    Object.entries(parseScores(searchParams.get('genreWeights'))).filter(([id]) =>
+      lookup.has(Number(id))
+    )
+  );
   const languageScores = parseScores(searchParams.get('languageScores'));
   const day = parseDay(searchParams.get('date'));
   const shuffle = searchParams.get('shuffle') ?? '0';
@@ -194,12 +208,7 @@ export async function GET(req: Request) {
       genreWeights,
       languageScores,
     };
-    const scored = scoreTitles(
-      candidates,
-      profile,
-      media === 'movie' ? MOVIE_LOOKUP : TV_LOOKUP,
-      media
-    );
+    const scored = scoreTitles(candidates, profile, lookup, media);
     // Genre weights drive the primary-genre choice in the diversity pass.
     const weights = new Map(
       Object.entries(genreWeights).map(([k, v]) => [Number(k), v])

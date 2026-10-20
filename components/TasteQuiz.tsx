@@ -7,12 +7,14 @@ import { useRouter } from 'next/navigation';
 import { Check, Shuffle } from 'lucide-react';
 import {
   addQuizSignals,
+  genreScoresFor,
   getTaste,
   saveTaste,
   type TasteKind,
+  type UserTaste,
 } from '@/lib/preferences';
 import { TMDB_MOVIE_GENRES, TMDB_TV_GENRES } from '@/lib/categories';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 import { cn } from '@/lib/utils';
 
 interface QuizTitle {
@@ -87,6 +89,11 @@ export default function TasteQuiz() {
   // Token = which "kind:session:round:reload" is the newest in-flight request.
   const fetchedRef = useRef('');
   const tokenRef = useRef('');
+  // One entry per finished round, so Back can show that round's titles
+  // again and restore the profile exactly as it was before its picks.
+  const historyRef = useRef<
+    { titles: QuizTitle[]; pickedIds: number[]; tasteBefore: UserTaste }[]
+  >([]);
 
   // Check once for an existing profile; kind-specific values load when the
   // user chooses Movies or Series below.
@@ -153,8 +160,10 @@ export default function TasteQuiz() {
     const params = new URLSearchParams({
       media: kind,
       genres: pool.join(','),
+      // The server keeps the first 600 ids: this session's titles first,
+      // then dislikes (must never resurface), then older likes.
       exclude: Array.from(
-        new Set([...shownRef.current, ...likedRef.current, ...disliked])
+        new Set([...shownRef.current, ...disliked, ...likedRef.current])
       ).join(','),
       count: String(ROUND_SIZE),
     });
@@ -218,6 +227,11 @@ export default function TasteQuiz() {
   const confirmRound = () => {
     const picked = currentTitles.filter((m) => pickedIds.includes(m.id));
     if (!picked.length) return;
+    historyRef.current.push({
+      titles: currentTitles,
+      pickedIds: picked.map((m) => m.id),
+      tasteBefore: getTaste(),
+    });
     const updated = addQuizSignals({
       kind,
       titleIds: picked.map((m) => m.id),
@@ -237,13 +251,67 @@ export default function TasteQuiz() {
   };
 
   // "None of these" — advance without recording anything.
-  const skipRound = () => advanceRound();
+  const skipRound = () => {
+    historyRef.current.push({
+      titles: currentTitles,
+      pickedIds: [],
+      tasteBefore: getTaste(),
+    });
+    advanceRound();
+  };
 
   const backRound = () => {
+    const previous = historyRef.current.pop();
+    if (round <= 1 || !previous) {
+      setPickedIds([]);
+      setCurrentTitles([]);
+      setStep('genres');
+      return;
+    }
+    // Undo that round's picks so re-picking doesn't count twice.
+    const restored = saveTaste(previous.tasteBefore);
+    const nextGenres =
+      kind === 'movie' ? restored.favoriteGenres : restored.favoriteTvGenres;
+    const nextLiked =
+      kind === 'movie' ? restored.likedMovieIds : restored.likedTvIds;
+    genresRef.current = nextGenres;
+    likedRef.current = nextLiked;
+    setSelectedGenres(nextGenres);
+    setLikedTitles(nextLiked);
+    // Claim the earlier round's fetch token: the effect then keeps the
+    // restored titles, and any in-flight fetch for this round is ignored.
+    const token = `${kind}:${sessionKey}:${round - 1}:${reloadKey}`;
+    fetchedRef.current = token;
+    tokenRef.current = token;
+    setLoading(false);
+    setCurrentTitles(previous.titles);
+    setPickedIds(previous.pickedIds);
+    setRound((r) => r - 1);
+  };
+
+  /** Saves the step-1 genres, then starts the title rounds. */
+  const beginRounds = () => {
+    // Rounds rebuild favorites from storage, so an unsaved step-1 choice
+    // would be lost after the first pick. Deselected genres also lose their
+    // learned weight — otherwise the scorer keeps favoring them.
+    const saved = getTaste();
+    const previous =
+      kind === 'movie' ? saved.favoriteGenres : saved.favoriteTvGenres;
+    const scores = { ...genreScoresFor(saved, kind) };
+    for (const id of previous) {
+      if (!selectedGenres.includes(id)) delete scores[String(id)];
+    }
+    saveTaste(
+      kind === 'movie'
+        ? { favoriteGenres: selectedGenres, genreScores: scores }
+        : { favoriteTvGenres: selectedGenres, tvGenreScores: scores }
+    );
+    historyRef.current = [];
+    setRound(1);
+    setSessionKey((k) => k + 1);
     setPickedIds([]);
     setCurrentTitles([]);
-    if (round > 1) setRound((r) => r - 1);
-    else setStep('genres');
+    setStep('titles');
   };
 
   // Shuffle replaces this round's three options without recording or
@@ -430,13 +498,7 @@ export default function TasteQuiz() {
               {selectedGenres.length} selected
             </span>
             <button
-              onClick={() => {
-                setRound(1);
-                setSessionKey((k) => k + 1);
-                setPickedIds([]);
-                setCurrentTitles([]);
-                setStep('titles');
-              }}
+              onClick={beginRounds}
               disabled={!selectedGenres.length}
               className={cn(
                 'rounded-full px-8 py-3 text-sm font-bold transition',

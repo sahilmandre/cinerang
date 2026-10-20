@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { tmdb, poster, isAdultTitle } from '@/lib/tmdb';
+import { tmdb, poster, isAdultTitle, isTmdbNotFound } from '@/lib/tmdb';
 import { ADULT_DEFAULT_SERVER } from '@/lib/servers';
 import { getRelatedTitles } from '@/lib/related';
 import RelatedCrossRow from '@/components/watch/RelatedCrossRow';
@@ -32,11 +32,14 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 export default async function WatchMovie({ params }: { params: { id: string } }) {
   if (!/^\d+$/.test(params.id)) notFound();
   let d: any = null;
+  let missing = false;
   try {
     d = await tmdb.movieDetails(params.id);
-  } catch {
-    /* handled below */
+  } catch (e) {
+    missing = isTmdbNotFound(e);
   }
+  // A deleted/unknown id is a real 404 — Retry could never fix it.
+  if (missing) notFound();
   if (!d?.id)
     return <LoadError title="Could not load this title" retryHref={`/watch/movie/${params.id}`} />;
   const adult = isAdultTitle(d);

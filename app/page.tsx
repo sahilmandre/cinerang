@@ -1,14 +1,23 @@
-import { tmdb } from '@/lib/tmdb';
+import { tmdb, hasTmdbCredentials } from '@/lib/tmdb';
 import Hero from '@/components/Hero';
 import Row from '@/components/Row';
 import ContinueWatching from '@/components/ContinueWatching';
 import RecommendedRow from '@/components/RecommendedRow';
 import LoadError from '@/components/LoadError';
 
+// Re-render at most every 5 minutes. TMDB responses stay in the data cache
+// for hours, so this costs no extra API calls — but a page rendered during
+// a TMDB outage (empty rows) heals in minutes instead of being served for
+// the full 6h data TTL.
+export const revalidate = 300;
+
 // One flaky endpoint (e.g. an ECONNRESET mid-request) empties just its row
 // instead of failing the whole page.
 const empty = { results: [] as any[] };
 const quiet = (p: Promise<any>) => p.catch(() => empty);
+// /trending/all also returns people, which Row would link to /watch/tv/<personId>.
+const titlesOnly = (items: any[] = []) =>
+  items.filter((item) => item.media_type === 'movie' || item.media_type === 'tv');
 
 export default async function Home() {
   const [data, movies, tv, top, anime, hindi, tamil, telugu] = await Promise.all([
@@ -23,11 +32,9 @@ export default async function Home() {
   ]);
   const sections = [data, movies, tv, top, anime, hindi, tamil, telugu];
   if (sections.every((s) => !(s.results?.length))) {
-    // Everything empty: almost always a missing key on first run, not a flake.
-    const configured = Boolean(
-      process.env.NEXT_PUBLIC_TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN
-    );
-    if (!configured) {
+    // Everything empty: a missing key on first run, or TMDB is unreachable
+    // (e.g. ISP-level blocking) — only the first deserves the setup guide.
+    if (!hasTmdbCredentials) {
       return (
         <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] p-6 sm:mt-10 sm:p-8">
           <h1 className="text-xl font-bold tracking-tight">Add your TMDB API key to get started</h1>
@@ -35,7 +42,7 @@ export default async function Home() {
             1. Get a free key at themoviedb.org → Settings → API
             <br />
             2. Copy <code>.env.example</code> to <code>.env.local</code> and fill{' '}
-            <code>NEXT_PUBLIC_TMDB_API_KEY</code>
+            <code>TMDB_ACCESS_TOKEN</code> (or <code>TMDB_API_KEY</code>)
             <br />
             3. Restart <code>npm run dev</code>
           </p>
@@ -46,11 +53,11 @@ export default async function Home() {
   }
   return (
     <div>
-      <Hero items={data.results ?? []} />
+      <Hero items={titlesOnly(data.results)} />
       <RecommendedRow media="movie" title="Recommended movies" viewAllHref="/recommended" />
       <RecommendedRow media="tv" title="Recommended series" viewAllHref="/recommended/series" />
       <ContinueWatching />
-      <Row title="Trending now" items={data.results ?? []} href="/browse/trending" />
+      <Row title="Trending now" items={titlesOnly(data.results)} href="/browse/trending" />
       <Row title="Popular movies" items={movies.results ?? []} type="movie" href="/browse/popular-movies" />
       <Row title="Popular TV shows" items={tv.results ?? []} type="tv" href="/browse/popular-tv" />
       <Row title="Top rated movies" items={top.results ?? []} type="movie" href="/browse/top-rated" />

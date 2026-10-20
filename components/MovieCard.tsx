@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Play, Star } from 'lucide-react';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 import { cn } from '@/lib/utils';
 
 export interface TMDBItem {
@@ -47,7 +47,7 @@ export default function MovieCard({
 }) {
   const type = forceType ?? mediaTypeOf(item);
   const title = item.title ?? item.name ?? 'Unknown';
-  const year = (item.release_date ?? '').slice(0, 4);
+  const year = (item.release_date ?? item.first_air_date ?? '').slice(0, 4);
   return (
     <Link
       href={`/watch/${type}/${item.id}`}

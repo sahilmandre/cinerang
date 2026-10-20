@@ -1,6 +1,6 @@
-// Client-side TMDB search for live as-you-type results.
-// Uses the same public key/token as the server lib (NEXT_PUBLIC_* is
-// bundled to the browser, so this exposes nothing new).
+// Client-side live as-you-type search. Goes through /api/search, so the
+// TMDB credential stays on the server and networks that block TMDB itself
+// still get suggestions.
 //
 // React Query-style behavior without the dependency: short-TTL in-memory
 // cache + in-flight request dedup. Repeated keystrokes, re-renders and
@@ -27,21 +27,11 @@ export function clearSearchCache() {
 }
 
 async function runQuery(query: string): Promise<SearchResult[]> {
-  const token = process.env.NEXT_PUBLIC_TMDB_ACCESS_TOKEN;
-  const key = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-  let url = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(
-    query
-  )}&include_adult=false&language=en-US&page=1`;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  else if (key) url += `&api_key=${key}`;
-  else throw new Error('Missing TMDB key');
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`TMDB ${res.status}`);
+  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Search ${res.status}`);
   const json = await res.json();
-  const data = ((json.results ?? []) as SearchResult[])
-    .filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && r.poster_path)
-    .slice(0, 8);
+  // The route already filters to movie/tv titles with posters.
+  const data = (json.results ?? []) as SearchResult[];
   cache.set(query.toLowerCase(), { at: Date.now(), data });
   return data;
 }

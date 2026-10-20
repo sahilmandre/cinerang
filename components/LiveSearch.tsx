@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Search, Film, Tv } from 'lucide-react';
 import { searchTitles, SearchResult } from '@/lib/tmdb-client';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 import { cn } from '@/lib/utils';
 
 function label(item: SearchResult) {
@@ -47,7 +47,8 @@ export default function LiveSearch({ autoFocus = false }: { autoFocus?: boolean 
         const r = await searchTitles(q.trim(), ctrl.signal);
         setResults(r);
         setHighlight(-1);
-        setOpen(true);
+        // No setOpen(true) here: typing already opens the list, and results
+        // landing after Escape / click-away must not pop it back open.
       } catch {
         /* aborted or flaky network — keep old results */
       } finally {
@@ -61,11 +62,17 @@ export default function LiveSearch({ autoFocus = false }: { autoFocus?: boolean 
   }, [q]);
 
   useEffect(() => {
+    // Closing also drops the highlight, so a later Enter runs a full search
+    // instead of opening a suggestion the user can no longer see.
+    const close = () => {
+      setOpen(false);
+      setHighlight(-1);
+    };
     const onClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) close();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') close();
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
@@ -111,8 +118,11 @@ export default function LiveSearch({ autoFocus = false }: { autoFocus?: boolean 
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
+            // Enter that confirms an IME composition (Japanese, Korean, …)
+            // must not submit the half-typed query.
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter') {
-              if (highlight >= 0 && results[highlight]) {
+              if (showDropdown && highlight >= 0 && results[highlight]) {
                 const r = results[highlight];
                 const { type } = label(r);
                 setOpen(false);
@@ -122,8 +132,12 @@ export default function LiveSearch({ autoFocus = false }: { autoFocus?: boolean 
               }
             } else if (e.key === 'ArrowDown') {
               e.preventDefault();
+              if (!showDropdown) {
+                setOpen(true);
+                return;
+              }
               setHighlight((h) => Math.min(h + 1, results.length - 1));
-            } else if (e.key === 'ArrowUp') {
+            } else if (e.key === 'ArrowUp' && showDropdown) {
               e.preventDefault();
               setHighlight((h) => Math.max(h - 1, -1));
             }

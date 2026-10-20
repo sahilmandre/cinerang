@@ -8,27 +8,22 @@ import RecommendationCard, {
 } from '@/components/RecommendationCard';
 import {
   getTaste,
+  hasTasteFor,
+  recommendationParams,
   TASTE_EVENT,
   type TasteKind,
   type UserTaste,
 } from '@/lib/preferences';
 import { TMDB_MOVIE_GENRES, TMDB_TV_GENRES } from '@/lib/categories';
-import { cn, localDayKey } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 const MOVIE_NAMES = new Map(TMDB_MOVIE_GENRES.map((g) => [g.id, g.name]));
 const TV_NAMES = new Map(TMDB_TV_GENRES.map((g) => [g.id, g.name]));
 
-function serializeScores(scores: Record<string, number>): string {
-  return Object.entries(scores)
-    .filter(([, value]) => Number.isFinite(value) && value > 0)
-    .map(([key, value]) => `${key}:${Math.round(value * 100) / 100}`)
-    .join(',');
-}
-
 export default function RecommendedExplorer({ media }: { media: TasteKind }) {
   const [items, setItems] = useState<RecommendationItem[]>([]);
   const [taste, setTaste] = useState<UserTaste | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'no-taste'>('loading');
   const [shuffleKey, setShuffleKey] = useState(0);
   const [genreFilter, setGenreFilter] = useState<number | null>(null);
   const [originFilter, setOriginFilter] = useState<'all' | 'hi' | 'ko'>('all');
@@ -36,42 +31,43 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
   const isMovie = media === 'movie';
   const names = isMovie ? MOVIE_NAMES : TV_NAMES;
 
-  const load = useCallback(() => {
+  // Fetches on mount and on Shuffle only — Like/Dislike train the profile
+  // without reshuffling the grid under the user (see RecommendedRow).
+  useEffect(() => {
     const current = getTaste();
     setTaste(current);
-    const params = new URLSearchParams();
-    const favorites = isMovie ? current.favoriteGenres : current.favoriteTvGenres;
-    const watched = isMovie ? current.watchedMovieIds : current.watchedTvIds;
-    const liked = isMovie ? current.likedMovieIds : current.likedTvIds;
-    const disliked = isMovie ? current.dislikedMovieIds : current.dislikedTvIds;
-    params.set('media', media);
-    if (favorites.length) params.set('favoriteGenres', favorites.join(','));
-    if (watched.length) params.set('watchedIds', watched.join(','));
-    if (liked.length) params.set('likedIds', liked.join(','));
-    if (disliked.length) params.set('dislikedIds', disliked.join(','));
-    const genreWeights = serializeScores(current.genreScores);
-    const languageScores = serializeScores(current.languageScores);
-    if (genreWeights) params.set('genreWeights', genreWeights);
-    if (languageScores) params.set('languageScores', languageScores);
-    params.set('limit', '48');
-    params.set('date', localDayKey());
-    params.set('shuffle', String(shuffleKey));
-
-    setLoading(true);
-    fetch(`/api/recommendations?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => setItems(data.results ?? []))
-      .catch(() => {
-        /* keep old items on flaky network */
+    if (!hasTasteFor(current, media)) {
+      setStatus('no-taste');
+      return;
+    }
+    const controller = new AbortController();
+    const params = recommendationParams(current, media, { limit: 48, shuffle: shuffleKey });
+    setStatus('loading');
+    fetch(`/api/recommendations?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
       })
-      .finally(() => setLoading(false));
-  }, [media, isMovie, shuffleKey]);
+      .then((data) => {
+        const results: RecommendationItem[] = data.results ?? [];
+        if (results.length) setItems(results);
+        setStatus(results.length ? 'ready' : 'error');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus('error');
+      });
+    return () => controller.abort();
+  }, [media, shuffleKey]);
 
+  // Keep the favorite-genre chips current as feedback trains the profile.
   useEffect(() => {
-    load();
-    window.addEventListener(TASTE_EVENT, load);
-    return () => window.removeEventListener(TASTE_EVENT, load);
-  }, [load]);
+    const sync = () => setTaste(getTaste());
+    window.addEventListener(TASTE_EVENT, sync);
+    return () => window.removeEventListener(TASTE_EVENT, sync);
+  }, []);
 
   // Dislike removes the card immediately. Likes keep it — a like only
   // trains the profile, the title must not vanish from the list.
@@ -217,7 +213,31 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
         </button>
       </div>
 
-      {loading && items.length === 0 ? (
+      {status === 'no-taste' ? (
+        <div className="mt-8 rounded-2xl glass p-6 text-center">
+          <p className="text-sm text-white/60">
+            We don&apos;t know your taste in {isMovie ? 'movies' : 'series'} yet.
+            Take the quick{' '}
+            <Link href="/taste" className="font-semibold text-accent hover:underline">
+              taste quiz
+            </Link>{' '}
+            and we&apos;ll fill this page with picks for you.
+          </p>
+        </div>
+      ) : status === 'error' && items.length === 0 ? (
+        <div className="mt-8 rounded-2xl glass p-6 text-center">
+          <p className="text-sm text-white/60">
+            Couldn&apos;t load your recommendations right now.{' '}
+            <button
+              type="button"
+              onClick={() => setShuffleKey((key) => key + 1)}
+              className="font-semibold text-accent hover:underline"
+            >
+              Try again
+            </button>
+          </p>
+        </div>
+      ) : status === 'loading' && items.length === 0 ? (
         <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i}>

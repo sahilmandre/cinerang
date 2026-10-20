@@ -16,6 +16,12 @@ const LOAD_TIMEOUT_MS = 15000;
 const DWELL_MS = 150000; // 2.5 min of visible, loaded player
 const DWELL_TICK_MS = 5000;
 
+export interface SeasonInfo {
+  number: number;
+  /** Episode count; 0 when TMDB doesn't know yet. */
+  episodes: number;
+}
+
 export default function Player({
   tmdbId,
   type,
@@ -23,6 +29,7 @@ export default function Player({
   posterPath,
   initialSeason = 1,
   initialEpisode = 1,
+  seasons = [],
   defaultServer,
   adult = false,
 }: {
@@ -32,6 +39,8 @@ export default function Player({
   posterPath: string | null;
   initialSeason?: number;
   initialEpisode?: number;
+  /** The show's seasons in order — bounds S/E input and "Next episode". */
+  seasons?: SeasonInfo[];
   defaultServer?: string;
   adult?: boolean;
 }) {
@@ -46,12 +55,16 @@ export default function Player({
   // keeping scripts/storage alive. Cross-origin players can't escape it.
   // Defaults off; VidFast/VidLink refuse sandboxed frames and load direct.
   const [blocker, setBlocker] = useState(false);
+  // The frame isn't rendered until the saved preference is read — otherwise
+  // it starts loading unsandboxed, then remounts sandboxed (double load).
+  const [prefReady, setPrefReady] = useState(false);
   useEffect(() => {
     try {
       if (localStorage.getItem('cinerang.popup_block') === '1') setBlocker(true);
     } catch {
       /* stay unblocked */
     }
+    setPrefReady(true);
   }, []);
   const toggleBlocker = () => {
     setBlocker((b) => {
@@ -62,9 +75,8 @@ export default function Player({
       }
       return !b;
     });
-    // No setKey here: toggling the blocker only changes the sandbox attr,
-    // which is derived from `blocker` + `current.noSandbox` at render.
-    // Remounting the iframe on every toggle wastes a full player reload.
+    // No setKey needed: the iframe key includes the sandbox state, because
+    // a changed sandbox attribute only applies when the frame navigates.
   };
   const [server, setServer] = useState(fallback);
   const [season, setSeason] = useState(initialSeason);
@@ -93,6 +105,10 @@ export default function Player({
   const persistRef = useRef(() => {});
   const current = list.find((s) => s.id === server);
   const sandboxed = blocker && !!current && !current.noSandbox;
+  // Direct frames sit under the click-to-play cover until the user clicks
+  // it — nothing can be playing before then, so the dwell clock waits.
+  const canPlayRef = useRef(false);
+  canPlayRef.current = sandboxed || !shield;
 
   // Keep local S/E in sync when the URL changes (season / episode links).
   useEffect(() => {
@@ -121,8 +137,10 @@ export default function Player({
       if (!loadedRef.current) autoAdvanceRef.current();
     }, LOAD_TIMEOUT_MS);
     return () => clearTimeout(t);
+    // `sandboxed` is in the iframe key, so a toggle remounts the frame and
+    // needs a fresh loading state + timeout too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server, episodeKey, key]);
+  }, [server, episodeKey, key, sandboxed]);
 
   // Ad-click shield: covers direct (unsandboxed) frames so the first click
   // — the one most likely to call window.open() — hits our button, not the
@@ -205,7 +223,7 @@ export default function Player({
     const id = window.setInterval(() => {
       if (dwellFiredRef.current) return;
       if (document.visibilityState !== 'visible') return;
-      if (!loadedRef.current) return;
+      if (!loadedRef.current || !canPlayRef.current) return;
       dwellAccumRef.current += DWELL_TICK_MS;
       if (dwellAccumRef.current >= DWELL_MS) {
         dwellFiredRef.current = true;
@@ -219,9 +237,34 @@ export default function Player({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const seasonInfo = (s: number) => seasons.find((x) => x.number === s);
+
+  /** Snaps S/E to the show's real seasons and episode counts. */
+  const clampSeasonEp = (s: number, e: number): [number, number] => {
+    let safeS = Math.max(0, Math.floor(s) || 0);
+    if (seasons.length && !seasonInfo(safeS)) {
+      // Unknown season: snap to the nearest season that exists.
+      safeS = seasons.reduce((best, x) =>
+        Math.abs(x.number - safeS) < Math.abs(best.number - safeS) ? x : best
+      ).number;
+    }
+    if (!seasons.length) safeS = Math.max(1, safeS);
+    const max = seasonInfo(safeS)?.episodes || Infinity;
+    const safeE = Math.min(max, Math.max(1, Math.floor(e) || 1));
+    return [safeS, safeE];
+  };
+
+  // Next episode, rolling over to the next season's first episode; null on
+  // the series finale. Unknown episode counts allow stepping forward.
+  const nextPosition = ((): [number, number] | null => {
+    const info = seasonInfo(season);
+    if (!info || !info.episodes || episode < info.episodes) return [season, episode + 1];
+    const following = seasons[seasons.indexOf(info) + 1];
+    return following ? [following.number, 1] : null;
+  })();
+
   const setSeasonEp = (s: number, e: number) => {
-    const safeS = Math.max(1, Math.min(40, Math.floor(s) || 1));
-    const safeE = Math.max(1, Math.min(200, Math.floor(e) || 1));
+    const [safeS, safeE] = clampSeasonEp(s, e);
     setSeason(safeS);
     setEpisode(safeE);
     setSeasonDraft(String(safeS));
@@ -236,8 +279,10 @@ export default function Player({
   // reload the iframe per character (and fight the user mid-typing).
   // Drafts commit on blur / Enter instead; invalid text snaps back.
   const commitDrafts = () => {
-    const s = Math.max(1, Math.min(40, Math.floor(Number(seasonDraft)) || 1));
-    const e = Math.max(1, Math.min(200, Math.floor(Number(episodeDraft)) || 1));
+    const [s, e] = clampSeasonEp(
+      seasonDraft.trim() ? Number(seasonDraft) : season,
+      Number(episodeDraft)
+    );
     if (s !== season || e !== episode) setSeasonEp(s, e);
     else {
       setSeasonDraft(String(s));
@@ -366,8 +411,8 @@ export default function Player({
           <input
             id="player-season"
             type="number"
-            min={1}
-            max={40}
+            min={seasons[0]?.number ?? 1}
+            max={seasons[seasons.length - 1]?.number}
             value={seasonDraft}
             onChange={(e) => setSeasonDraft(e.target.value)}
             onBlur={commitDrafts}
@@ -383,7 +428,7 @@ export default function Player({
             id="player-episode"
             type="number"
             min={1}
-            max={200}
+            max={seasonInfo(season)?.episodes || undefined}
             value={episodeDraft}
             onChange={(e) => setEpisodeDraft(e.target.value)}
             onBlur={commitDrafts}
@@ -392,12 +437,17 @@ export default function Player({
             }}
             className="w-16 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-center text-sm tabular-nums outline-none transition focus:border-accent/60"
           />
-          <button
-            onClick={() => setSeasonEp(season, episode + 1)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-4 py-1.5 text-[13px] font-bold text-accent transition hover:bg-accent/25"
-          >
-            Next episode <span aria-hidden>→</span>
-          </button>
+          {nextPosition ? (
+            <button
+              onClick={() => setSeasonEp(nextPosition[0], nextPosition[1])}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-4 py-1.5 text-[13px] font-bold text-accent transition hover:bg-accent/25"
+            >
+              {nextPosition[0] !== season ? `Season ${nextPosition[0]}` : 'Next episode'}{' '}
+              <span aria-hidden>→</span>
+            </button>
+          ) : (
+            <span className="ml-auto text-xs font-semibold text-white/40">Series finale</span>
+          )}
         </div>
       )}
 
@@ -411,22 +461,26 @@ export default function Player({
             </p>
           </div>
         )}
-        <iframe
-          key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
-          src={url}
-          onError={autoAdvance}
-          onLoad={() => {
-            // Embed rendered — starts the engagement clock (dwell timer),
-            // but does NOT itself write Continue Watching.
-            markLoaded(true);
-          }}
-          className="relative z-0 aspect-video w-full"
-          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-          allowFullScreen
-          referrerPolicy="origin"
-          sandbox={sandboxed ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
-          title={`${title} player${type === 'tv' ? `, season ${season} episode ${episode}` : ''}`}
-        />
+        {prefReady ? (
+          <iframe
+            key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
+            src={url}
+            onError={autoAdvance}
+            onLoad={() => {
+              // Embed rendered — starts the engagement clock (dwell timer),
+              // but does NOT itself write Continue Watching.
+              markLoaded(true);
+            }}
+            className="relative z-0 aspect-video w-full"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="origin"
+            sandbox={sandboxed ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
+            title={`${title} player${type === 'tv' ? `, season ${season} episode ${episode}` : ''}`}
+          />
+        ) : (
+          <div className="aspect-video w-full" />
+        )}
         {!sandboxed && shield && !exhausted && (
           <button
             type="button"

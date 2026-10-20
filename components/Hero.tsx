@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Star } from 'lucide-react';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 import { TMDBItem } from './MovieCard';
 import { cn } from '@/lib/utils';
 

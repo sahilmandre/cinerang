@@ -6,15 +6,12 @@ import { ArrowRight, Shuffle } from 'lucide-react';
 import RecommendationCard, {
   type RecommendationItem,
 } from '@/components/RecommendationCard';
-import { getTaste, TASTE_EVENT, type TasteKind } from '@/lib/preferences';
-import { localDayKey } from '@/lib/utils';
-
-function serializeScores(scores: Record<string, number>): string {
-  return Object.entries(scores)
-    .filter(([, value]) => Number.isFinite(value) && value > 0)
-    .map(([key, value]) => `${key}:${Math.round(value * 100) / 100}`)
-    .join(',');
-}
+import {
+  getTaste,
+  hasTasteFor,
+  recommendationParams,
+  type TasteKind,
+} from '@/lib/preferences';
 
 export default function RecommendedRow({
   media = 'movie',
@@ -28,53 +25,44 @@ export default function RecommendedRow({
   limit?: number;
 }) {
   const [items, setItems] = useState<RecommendationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'no-taste'>('loading');
   const [shuffleKey, setShuffleKey] = useState(0);
 
   const heading = title ?? (media === 'movie' ? 'Recommended movies' : 'Recommended series');
   const emptyNoun = media === 'movie' ? 'movies' : 'series';
 
-  const load = useCallback(() => {
-    const taste = getTaste();
-    const params = new URLSearchParams();
-    const favorites =
-      media === 'movie' ? taste.favoriteGenres : taste.favoriteTvGenres;
-    const watched =
-      media === 'movie' ? taste.watchedMovieIds : taste.watchedTvIds;
-    const liked = media === 'movie' ? taste.likedMovieIds : taste.likedTvIds;
-    const disliked =
-      media === 'movie' ? taste.dislikedMovieIds : taste.dislikedTvIds;
-    params.set('media', media);
-    if (favorites.length) params.set('favoriteGenres', favorites.join(','));
-    if (watched.length) params.set('watchedIds', watched.join(','));
-    if (liked.length) params.set('likedIds', liked.join(','));
-    if (disliked.length) params.set('dislikedIds', disliked.join(','));
-    const genreWeights = serializeScores(taste.genreScores);
-    const languageScores = serializeScores(taste.languageScores);
-    if (genreWeights) params.set('genreWeights', genreWeights);
-    if (languageScores) params.set('languageScores', languageScores);
-    params.set('limit', String(limit));
-    // Daily rotation key plus manual shuffle token. The same taste returns
-    // the same list all day; a new calendar day rotates the recommendations.
-    params.set('date', localDayKey());
-    params.set('shuffle', String(shuffleKey));
-
-    setLoading(true);
-    fetch(`/api/recommendations?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => setItems(data.results ?? []))
-      .catch(() => {
-        /* keep old items on flaky network */
-      })
-      .finally(() => setLoading(false));
-  }, [media, limit, shuffleKey]);
-
+  // Fetches on mount and on Shuffle only. Like/Dislike train the profile
+  // without refetching — a refetch reseeds the mix and swaps the row out
+  // from under the user. The new taste applies on the next Shuffle/visit.
   useEffect(() => {
-    load();
-    // Refresh live when the taste quiz or feedback buttons save preferences.
-    window.addEventListener(TASTE_EVENT, load);
-    return () => window.removeEventListener(TASTE_EVENT, load);
-  }, [load]);
+    const taste = getTaste();
+    if (!hasTasteFor(taste, media)) {
+      setStatus('no-taste');
+      return;
+    }
+    const controller = new AbortController();
+    const params = recommendationParams(taste, media, { limit, shuffle: shuffleKey });
+    setStatus('loading');
+    fetch(`/api/recommendations?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        const results: RecommendationItem[] = data.results ?? [];
+        // An empty list means every upstream pool failed — keep old items.
+        if (results.length) setItems(results);
+        setStatus(results.length ? 'ready' : 'error');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus('error');
+      });
+    // Aborting on Shuffle/unmount stops an older response landing last.
+    return () => controller.abort();
+  }, [media, limit, shuffleKey]);
 
   // Dislike removes the card immediately. Likes keep it — a like only
   // trains the profile, the title must not vanish from the list.
@@ -87,7 +75,7 @@ export default function RecommendedRow({
     []
   );
 
-  if (loading && items.length === 0) {
+  if (status === 'loading' && items.length === 0) {
     return (
       <section className="cv-auto mt-10 scroll-mt-24 md:mt-12">
         <div className="mb-3.5 flex items-center gap-3 px-1">
@@ -117,13 +105,26 @@ export default function RecommendedRow({
             {heading}
           </h2>
         </div>
-        <p className="px-1 text-sm text-white/50">
-          Tell us your taste on the{' '}
-          <Link href="/taste" className="font-semibold text-accent hover:underline">
-            Taste page
-          </Link>
-          , and we&apos;ll suggest {emptyNoun} just for you.
-        </p>
+        {status === 'no-taste' ? (
+          <p className="px-1 text-sm text-white/50">
+            Tell us your taste on the{' '}
+            <Link href="/taste" className="font-semibold text-accent hover:underline">
+              Taste page
+            </Link>
+            , and we&apos;ll suggest {emptyNoun} just for you.
+          </p>
+        ) : (
+          <p className="px-1 text-sm text-white/50">
+            Couldn&apos;t load your recommendations right now.{' '}
+            <button
+              type="button"
+              onClick={() => setShuffleKey((key) => key + 1)}
+              className="font-semibold text-accent hover:underline"
+            >
+              Try again
+            </button>
+          </p>
+        )}
       </section>
     );
   }

@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 
 /**
  * Watch-page sidebar — poster thumb beside an info card on phones,

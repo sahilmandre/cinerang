@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { poster } from '@/lib/tmdb';
+import { poster } from '@/lib/tmdb-image';
 
 /**
  * Cinematic title header — full-bleed backdrop with the poster, title,

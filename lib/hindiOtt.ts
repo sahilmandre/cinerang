@@ -86,10 +86,16 @@ const BROADCAST_NETWORK_IDS = [
 //  - first_air_date.gte      -> 2015 (pre-OTT Hindi TV era is not "OTT")
 //  - without_genres=10766    -> "Soap" (TMDB's marker for TV soap serials)
 //  - vote_average.gte=5.5    -> real OTT shows are well reviewed, soaps are not
-//  - vote_count.gte=5        -> a show with <5 votes has no meaningful rating
+//  - vote_count.gte          -> see voteFloor below
 const OTT_FILTERS =
   'with_original_language=hi&with_type=4%7C2&first_air_date.gte=2015-01-01' +
-  '&without_genres=10766&vote_average.gte=5.5&vote_count.gte=5';
+  '&without_genres=10766&vote_average.gte=5.5';
+
+// A show with <5 votes has no meaningful rating. Sorting by rating needs a
+// higher floor: at 5, shows with 6–15 votes and a 9.x average outranked
+// Scam 1992 and Panchayat (checked Oct 2026).
+const voteFloor = (sort: 'popularity' | 'vote_average') =>
+  `vote_count.gte=${sort === 'vote_average' ? 30 : 5}`;
 
 const pipe = (ids: number[]) => ids.map(String).join('%7C');
 
@@ -154,8 +160,9 @@ export async function fetchHindiOttPage(
   sort: 'popularity' | 'vote_average' = 'popularity'
 ): Promise<HindiOttPage> {
   const sortBy = sort === 'vote_average' ? 'vote_average.desc' : 'popularity.desc';
-  const ottPath = `/discover/tv?with_networks=${OTT_NETWORKS}&${OTT_FILTERS}&sort_by=${sortBy}`;
-  const broadcastPath = `/discover/tv?with_networks=${BROADCAST_NETWORKS}&${OTT_FILTERS}&sort_by=${sortBy}`;
+  const filters = `${OTT_FILTERS}&${voteFloor(sort)}`;
+  const ottPath = `/discover/tv?with_networks=${OTT_NETWORKS}&${filters}&sort_by=${sortBy}`;
+  const broadcastPath = `/discover/tv?with_networks=${BROADCAST_NETWORKS}&${filters}&sort_by=${sortBy}`;
 
   const [ottRaw, broadcastRaw] = (await Promise.all([
     fetcher(`${ottPath}&page=${page}`),
