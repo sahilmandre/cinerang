@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import MovieCard from '@/components/MovieCard';
+import SyncHint from '@/components/SyncHint';
 import {
   getWatchlist,
   removeFromWatchlist,
@@ -46,6 +47,7 @@ export default function WatchlistPage() {
           {filtered.length} of {items.length}
         </span>
       </div>
+      <SyncHint what="your watchlist" className="mt-2" />
 
       <div className="mt-4 inline-flex gap-1 rounded-full glass p-1 text-sm font-semibold">
         {(

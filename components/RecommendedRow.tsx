@@ -12,6 +12,7 @@ import {
   recommendationParams,
   type TasteKind,
 } from '@/lib/preferences';
+import { useReloadOnFirstSync } from '@/lib/sync/hooks';
 
 export default function RecommendedRow({
   media = 'movie',
@@ -27,6 +28,7 @@ export default function RecommendedRow({
   const [items, setItems] = useState<RecommendationItem[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'no-taste'>('loading');
   const [shuffleKey, setShuffleKey] = useState(0);
+  const syncKey = useReloadOnFirstSync(status === 'no-taste', media);
 
   const heading = title ?? (media === 'movie' ? 'Recommended movies' : 'Recommended series');
   const emptyNoun = media === 'movie' ? 'movies' : 'series';
@@ -62,7 +64,7 @@ export default function RecommendedRow({
       });
     // Aborting on Shuffle/unmount stops an older response landing last.
     return () => controller.abort();
-  }, [media, limit, shuffleKey]);
+  }, [media, limit, shuffleKey, syncKey]);
 
   // Dislike removes the card immediately. Likes keep it — a like only
   // trains the profile, the title must not vanish from the list.

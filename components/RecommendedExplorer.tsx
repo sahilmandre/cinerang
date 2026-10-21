@@ -15,6 +15,7 @@ import {
   type UserTaste,
 } from '@/lib/preferences';
 import { TMDB_MOVIE_GENRES, TMDB_TV_GENRES } from '@/lib/categories';
+import { useReloadOnFirstSync } from '@/lib/sync/hooks';
 import { cn } from '@/lib/utils';
 
 const MOVIE_NAMES = new Map(TMDB_MOVIE_GENRES.map((g) => [g.id, g.name]));
@@ -27,6 +28,7 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
   const [shuffleKey, setShuffleKey] = useState(0);
   const [genreFilter, setGenreFilter] = useState<number | null>(null);
   const [originFilter, setOriginFilter] = useState<'all' | 'hi' | 'ko'>('all');
+  const syncKey = useReloadOnFirstSync(status === 'no-taste', media);
 
   const isMovie = media === 'movie';
   const names = isMovie ? MOVIE_NAMES : TV_NAMES;
@@ -60,7 +62,7 @@ export default function RecommendedExplorer({ media }: { media: TasteKind }) {
         if (!controller.signal.aborted) setStatus('error');
       });
     return () => controller.abort();
-  }, [media, shuffleKey]);
+  }, [media, shuffleKey, syncKey]);
 
   // Keep the favorite-genre chips current as feedback trains the profile.
   useEffect(() => {

@@ -1,6 +1,18 @@
 # Accounts & cross-device sync — plan
 
-Status: **proposed** · Target: Next.js 14.2 (App Router) on Vercel · Users: 4–5, internal
+Status: **implemented** (Phases 1–4) — waiting on Phase 0 accounts/env to go live · Target: Next.js 14.2 (App Router) on Vercel · Users: 4–5, internal
+
+> **Changes made during implementation** (details in the sections below):
+> - **Sign-up is open to any Google account** (decided 2026-10-21). `ALLOWED_EMAILS` is now an
+>   optional invite list, enforced by Better Auth 1.7's `user.validateUserInfo` gate (runs
+>   on sign-up *and* every Google sign-in) instead of two `databaseHooks`. A later admin
+>   panel will manage users (planned: Better Auth's admin plugin — ban/unban, remove, roles).
+> - No `prompt: 'select_account'`: sign-in is one click for a returning user.
+> - Continue Watching entries also store the **video server** (`server`); a title
+>   resumes on the server it was last played on, on any device.
+> - The Better Auth browser client (~12 KB gzip) loads only on a sign-in/out click;
+>   the session is read with one call to Better Auth's `GET /api/auth/get-session`
+>   (`lib/session.ts`). The sync engine loads only for signed-in users.
 
 ## 1. Goal
 
@@ -14,7 +26,7 @@ Today every user signal lives in `localStorage` (`cinejoy.taste`, `cinejoy.watch
   network to show or change a like, a watchlist entry or a resume point.
 - **Free to run forever** for a handful of users, with nothing that silently pauses.
 
-Non-goals: public sign-up, email/password, roles, social features.
+Non-goals: email/password, social features. (Roles / admin panel: later.)
 
 ## 2. Decisions
 
@@ -22,7 +34,7 @@ Non-goals: public sign-up, email/password, roles, social features.
 |---|---|---|
 | Auth library | **Better Auth** (`better-auth` 1.7) + Google | Runs inside our Next.js app (no third-party auth service), free, keeps users in our own DB. The Auth.js/NextAuth team joined Better Auth in Sept 2025 and recommends it for new projects. Peer deps verified: `next ^14 \|\| ^15 \|\| ^16`, `react ^18 \|\| ^19`, `mongodb ^6 \|\| ^7`. |
 | Sign-in method | **Google only** | Everyone has one; no passwords to store or reset. |
-| Access control | **Email allowlist** (`ALLOWED_EMAILS`) + Google consent screen in *Testing* mode with the same people as test users | The site is public on Vercel; only the 4–5 invited people can create an account or write data. |
+| Access control | **Open sign-up**: any Google account. Google app published *In production* (basic scopes only — no Google review). Optional `ALLOWED_EMAILS` switches to invite-only. | Anyone may use the site; each account only ever reads/writes its own profile. User management moves to a future admin panel. |
 | Database | **MongoDB Atlas M0 (free)** | Our data is one small document per user — a natural document-DB fit. Free tier does **not** pause for low traffic: it only pauses after **60 days with zero connections** (vs Supabase free: paused after **1 week** of inactivity). A daily keep-alive ping removes even that risk. |
 | Sessions | DB-backed sessions + Better Auth **cookie cache** (5 min) | Session checks are answered from a signed cookie, so they normally cost **no DB call**, while DB sessions still allow "sign out everywhere". 30-day sessions, refreshed daily. |
 | Sync model | **Local-first, op-based sync** | `localStorage` stays the instant UI source; every change is also recorded as a small operation and sent in batches. Explained in §5. |
@@ -76,8 +88,9 @@ interface Profile {
   _id: string;                 // Better Auth user id
   rev: number;                 // +1 per applied batch; used as the ETag
   taste: UserTaste;            // exactly the shape in lib/preferences.ts
-  watchlist: ListItem[];       // newest first, cap 500
-  continue: ContinueItem[];    // newest first, cap 30 (was 20 locally)
+  watchlist: ContinueItem[];   // newest first, cap 500
+  continue: ContinueItem[];    // newest first, cap 30 (was 20 locally);
+                               // each has season/episode + `server` (lib/servers id)
   prefs: { popupBlock: boolean };
   appliedOps: string[];        // last 500 op ids → retries are idempotent
   createdAt: Date;
@@ -199,39 +212,36 @@ State in `localStorage` key `cinerang.sync`: `{ ownerId, rev, outbox: Op[], last
 ## 6. Auth integration details
 
 ```ts
-// lib/auth.ts  (server only)
+// lib/auth.ts  (server only) — created lazily by getAuth(), so builds need no secrets
 import { betterAuth } from 'better-auth/minimal';   // adapter-only entry: excludes Kysely
 import { mongodbAdapter } from '@better-auth/mongo-adapter';
-import { client, db } from './db';
 
-export const auth = betterAuth({
+betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: mongodbAdapter(db, { client }),          // Atlas = replica set → transactions
   socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      prompt: 'select_account',
-    },
+    google: { clientId, clientSecret },              // Google only; no forced account chooser
   },
   session: {
     expiresIn: 60 * 60 * 24 * 30,                     // 30 days
     updateAge: 60 * 60 * 24,                          // refresh at most daily
     cookieCache: { enabled: true, maxAge: 5 * 60 },   // no DB read on most checks
   },
-  databaseHooks: {
-    user:    { create: { before: rejectUnlessAllowed } },  // allowlist on sign-up
-    session: { create: { before: rejectUnlessAllowed } },  // and on every sign-in
+  user: {
+    // Runs on sign-up and on every Google sign-in with the fresh email.
+    // Rejection → redirect to errorCallbackURL with ?error=not_invited.
+    validateUserInfo: ({ user }) =>
+      isAllowedEmail(user.email) ? undefined : { error: 'not_invited' },
   },
 });
 ```
 
-- Route handler: `app/api/auth/[...all]/route.ts` → `export const { GET, POST } = toNextJsHandler(auth)`.
-- Client: `lib/auth-client.ts` → `createAuthClient()` from `better-auth/react`.
+- Route handler: `app/api/auth/[...all]/route.ts` → `toNextJsHandler((req) => getAuth().handler(req))`.
+- Client: `lib/auth-client.ts` → `createAuthClient()` from `better-auth/react`, imported
+  on demand by `lib/session.ts` (`signIn.social`, `signOut`, `revokeSessions`).
 - Google callback URL: `<origin>/api/auth/callback/google`.
-- Exact option names (`prompt`, revoke-sessions call, hook signatures) are to be confirmed
-  against the Better Auth 1.7 docs during Phase 1.
+- Option names were verified against the installed `better-auth@1.7.12` type definitions.
 
 **MongoDB client (`lib/db.ts`)** — one `MongoClient` per server instance, cached on
 `globalThis` (survives dev hot reloads and warm serverless invocations):
@@ -243,15 +253,19 @@ runtime and local Node 24 both qualify.
 
 ## 7. UI changes
 
-- **Navbar → account button** (client component). Signed out: "Sign in" →
-  `authClient.signIn.social({ provider: 'google', callbackURL: <current page> })`.
-  Signed in: Google avatar → menu with name/email, "Sign out", "Sign out of all devices".
-  Mobile: same button in the header next to search.
-- **`<SyncProvider />`** in `app/layout.tsx`: client component that renders nothing; it
-  watches the session and starts/stops the engine. Adds no server work to any page.
-- **Continue Watching** listens for `CONTINUE_EVENT`, so a resume point saved on another
-  device appears without a reload when the tab regains focus.
-- Small "Sign in to sync across devices" hint on the Taste and Watchlist pages for guests.
+- **Navbar → `AccountButton`** (one instance for desktop and mobile). Signed out: Google
+  "Sign in" → `signIn.social({ provider: 'google', callbackURL: <current page> })` — the
+  Better Auth client is prefetched on hover, so the click goes straight to Google.
+  Signed in: avatar → menu with name/email, "Sign out", "Sign out of all devices".
+  A failed sign-in returns with `?signin=failed&error=…` and shows a short notice.
+- **`<SyncProvider />`** in `app/layout.tsx`: renders nothing; follows the session and
+  starts/stops the engine. Adds no server work to any page.
+- **Continue Watching** subscribes to `CONTINUE_EVENT`, so a resume point saved on another
+  device appears without a reload.
+- **Player** starts on the saved server for the title. On a fresh device opened straight
+  on a watch link, a resume point that arrives by sync within 15 s switches the player to
+  its server — unless the viewer already picked one.
+- Small "Sign in to sync … across devices" hint on the Taste and Watchlist pages for guests.
 
 ## 8. Performance budget
 
@@ -262,7 +276,7 @@ runtime and local Node 24 both qualify.
 | Extra requests per page load | `get-session` (served from cookie cache) + one sync `GET` (usually 304, ~200 B) |
 | Writes | ≤ 1 request per ~1.5 s of activity, batched |
 | DB work per pull | One `_id` lookup returning only `rev` when unchanged |
-| Client JS added | Measure with `next build`; target ≤ 15 KB gzip on the shared bundle. Account menu code lazy-loaded on open. |
+| Client JS added | Target ≤ 15 KB gzip. **Measured** (layout + page JS, gzip): +4.5 KB `/`, +5.5 KB `/movies`, +5.7 KB watch pages, +7.8 KB `/taste`, +8.8 KB `/watchlist`. Better Auth client (12 KB) and sync engine (1.4 KB) are separate on-demand chunks. |
 
 ## 9. Security
 
@@ -320,24 +334,28 @@ runtime and local Node 24 both qualify.
 | `BETTER_AUTH_SECRET` | output of `openssl rand -base64 32` | Different per environment |
 | `BETTER_AUTH_URL` | `http://localhost:3000` / `https://<domain>` | |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from Google Cloud | |
-| `ALLOWED_EMAILS` | `a@gmail.com,b@gmail.com` | Comma-separated, case-insensitive |
+| `ALLOWED_EMAILS` | *(empty)* or `a@gmail.com,b@gmail.com` | Optional. Empty = anyone can sign up; set = invite-only. Comma-separated, case-insensitive |
 | `CRON_SECRET` | random string | Vercel attaches it to cron calls |
 
 ## 12. Test checklist
 
 - Sign in → existing guest likes/watchlist/resume points appear in the account (import).
 - Two browsers, same account: like on A, focus B → visible. Watchlist add on both at once →
-  both entries kept. Episode resume on phone → laptop's Continue Watching jumps to it.
+  both entries kept. Episode resume on phone → laptop's Continue Watching jumps to it, and
+  opening it starts on the **same server** the phone was using.
 - Go offline, like 3 titles, reload, go online → all 3 reach the server exactly once.
 - Replay the same POST batch → `rev` unchanged, no double score increments.
-- Non-allowlisted Google account → refused with a clear message.
+- `ALLOWED_EMAILS` empty → any Google account signs in. Set → a non-listed account is
+  refused with a clear message.
 - Sign out → local data cleared; signing in as a different user shows only their data.
 - `next build` output: `/`, `/movies`, `/tv` still marked static/ISR.
 
-## 13. Open questions
+## 13. Decisions on the former open questions
 
-1. Keep guest (signed-out) mode as today, or require sign-in for everything? **Plan assumes
-   guest mode stays.**
-2. Clear local data on sign-out (safer for shared devices) — **plan assumes yes.**
-3. Production domain for the Google redirect URI.
-4. Is Atlas M0 offered in Mumbai on your account? Decides `bom1` vs `sin1`.
+1. Guest (signed-out) mode stays.
+2. Local data is cleared on sign-out.
+3. Production domain: **https://cinerang.vercel.app** — Google redirect URI
+   `https://cinerang.vercel.app/api/auth/callback/google`, `BETTER_AUTH_URL` on Vercel set to
+   the same origin. Branding: home page `https://cinerang.vercel.app`, privacy policy
+   `https://cinerang.vercel.app/privacy`, authorized domain `cinerang.vercel.app`.
+4. Atlas M0 cluster is on AWS Mumbai (`AP_SOUTH_1`) → Vercel region `bom1`.

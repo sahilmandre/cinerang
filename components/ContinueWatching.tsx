@@ -3,23 +3,28 @@ import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Play, X } from 'lucide-react';
-import { getContinue, removeContinue, clearContinue, ContinueItem } from '@/lib/storage';
+import {
+  getContinue,
+  removeContinue,
+  clearContinue,
+  subscribeContinue,
+  ContinueItem,
+} from '@/lib/storage';
 import { poster } from '@/lib/tmdb-image';
 
 export default function ContinueWatching() {
   const [items, setItems] = useState<ContinueItem[]>([]);
   const headingId = useId();
-  useEffect(() => setItems(getContinue()), []);
+  // Live: a resume point saved on another device appears once synced.
+  useEffect(() => {
+    const load = () => setItems(getContinue());
+    load();
+    return subscribeContinue(load);
+  }, []);
   if (!items.length) return null;
 
-  const remove = (id: number, mediaType: string) => {
-    removeContinue(id, mediaType);
-    setItems(getContinue());
-  };
-  const clear = () => {
-    clearContinue();
-    setItems([]);
-  };
+  const remove = (id: number, mediaType: string) => removeContinue(id, mediaType);
+  const clear = () => clearContinue();
 
   return (
     <section aria-labelledby={headingId} className="cv-auto mt-10 scroll-mt-24 md:mt-12">

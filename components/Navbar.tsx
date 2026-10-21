@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import AccountButton from './AccountButton';
 import LiveSearch from './LiveSearch';
 import NavLinks from './NavLinks';
 import { cn } from '@/lib/utils';
@@ -148,6 +149,10 @@ export default function Navbar() {
                   <Search size={17} />
                 </button>
               </div>
+
+              {/* One instance for both layouts (a failed sign-in notice
+                  must render in the visible one) */}
+              <AccountButton />
             </>
           )}
         </div>

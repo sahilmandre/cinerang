@@ -18,6 +18,21 @@ npm run dev
 ```
 Open http://localhost:3000
 
+## Accounts & sync (optional)
+One-click Google sign-in (Better Auth) keeps taste, likes, watchlist and
+Continue Watching — including the server each title was playing on — in
+MongoDB, so they follow you to every device. Signed out, everything works as
+before, saved in the browser only. Design: `docs/auth-and-sync-plan.md`.
+
+1. Fill the "Accounts & sync" block in `.env.local` (see `.env.example`):
+   `MONGODB_URI`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, `CRON_SECRET`. Sign-up is open to any Google
+   account; set `ALLOWED_EMAILS` to make it invite-only.
+2. `npm run db:setup` once — creates the indexes.
+3. Restart `npm run dev`. On Vercel, add the same variables (with the
+   production `BETTER_AUTH_URL`) and keep `vercel.json`'s region next to the
+   Atlas cluster.
+
 ## Routes
 - `/` trending / popular / top-rated / anime
 - `/search?q=...`

@@ -3,12 +3,23 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Play, RotateCcw, ShieldCheck, ShieldOff, SquareArrowOutUpRight } from 'lucide-react';
 import { SERVERS, getEmbedUrl, MediaType, ADULT_DEFAULT_SERVER, orderedServers } from '@/lib/servers';
-import { saveContinue } from '@/lib/storage';
+import {
+  getPopupBlock,
+  lastServerFor,
+  saveContinue,
+  setPopupBlock,
+  subscribeContinue,
+} from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
 // If a frame neither loads nor errors within this window, treat it as dead
 // (iframe onError rarely fires cross-browser for network failures).
 const LOAD_TIMEOUT_MS = 15000;
+
+// A resume point synced from another device can land just after the page
+// opens; within this window (and before the viewer picks a server) the
+// player switches to the server saved with it.
+const ADOPT_WINDOW_MS = 15000;
 
 // Continue Watching gating: a title counts as "being watched" only after
 // sustained visible engagement. Cross-origin embeds expose no play events,
@@ -55,30 +66,24 @@ export default function Player({
   // keeping scripts/storage alive. Cross-origin players can't escape it.
   // Defaults off; VidFast/VidLink refuse sandboxed frames and load direct.
   const [blocker, setBlocker] = useState(false);
-  // The frame isn't rendered until the saved preference is read — otherwise
-  // it starts loading unsandboxed, then remounts sandboxed (double load).
+  // The frame isn't rendered until the saved preferences are read —
+  // otherwise it starts loading unsandboxed (or on the default server),
+  // then remounts (double load).
   const [prefReady, setPrefReady] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem('cinerang.popup_block') === '1') setBlocker(true);
-    } catch {
-      /* stay unblocked */
-    }
-    setPrefReady(true);
-  }, []);
   const toggleBlocker = () => {
-    setBlocker((b) => {
-      try {
-        localStorage.setItem('cinerang.popup_block', b ? '0' : '1');
-      } catch {
-        /* session-only */
-      }
-      return !b;
-    });
+    const next = !blocker;
+    setBlocker(next);
+    setPopupBlock(next);
     // No setKey needed: the iframe key includes the sandbox state, because
     // a changed sandbox attribute only applies when the frame navigates.
   };
   const [server, setServer] = useState(fallback);
+  const serverRef = useRef(server);
+  serverRef.current = server;
+  // Set once the viewer chooses a server themselves; a synced resume point
+  // must never override that choice.
+  const userPickedRef = useRef(false);
+  const savedServerRef = useRef<string | undefined>(undefined);
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
   const [seasonDraft, setSeasonDraft] = useState(String(initialSeason));
@@ -128,6 +133,22 @@ export default function Player({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeKey]);
 
+  // A title resumes on the server it was last watched on (saved with
+  // Continue Watching and synced to the account). Read after mount —
+  // localStorage isn't available during SSR — and declared after the
+  // episode reset above, which seeds triedRef with the default server.
+  useEffect(() => {
+    setBlocker(getPopupBlock());
+    const saved = lastServerFor(Number(tmdbId), type);
+    savedServerRef.current = saved;
+    if (saved && saved !== serverRef.current && list.some((s) => s.id === saved)) {
+      triedRef.current = [saved];
+      setServer(saved);
+    }
+    setPrefReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmdbId, type]);
+
   // Load-timeout failover: complements onError for silent network failures.
   // Reads loadedRef instead of a setState updater (updaters must be pure —
   // StrictMode double-invokes them, which used to skip a server).
@@ -174,17 +195,18 @@ export default function Player({
   // DNS block, connection reset) or the load timeout elapses. Note: errors
   // rendered *inside* a loaded player (e.g. "no copy for this title") are
   // cross-origin and invisible to us — use "Try next server" for those.
-  const autoAdvance = () => {
+  const autoAdvance = (): string | null => {
     const remaining = list.map((s) => s.id).filter((id) => !triedRef.current.includes(id));
     if (!remaining.length) {
       setExhausted(true);
-      return;
+      return null;
     }
     const next = remaining[0];
     triedRef.current.push(next);
     setServer(next);
     markLoaded(false);
     setKey((k) => k + 1);
+    return next;
   };
   const autoAdvanceRef = useRef(autoAdvance);
   autoAdvanceRef.current = autoAdvance;
@@ -192,7 +214,7 @@ export default function Player({
   const nextUntried = list.map((s) => s.id).find((id) => !triedRef.current.includes(id));
   const nextName = list.find((s) => s.id === nextUntried)?.name;
 
-  const persist = (s = season, e = episode) =>
+  const persist = (s = season, e = episode, srv = server) =>
     saveContinue({
       id: Number(tmdbId),
       mediaType: type,
@@ -200,9 +222,27 @@ export default function Player({
       poster: posterPath,
       season: s,
       episode: e,
+      server: srv,
       updatedAt: Date.now(),
     });
   persistRef.current = persist;
+
+  // First visit on another device: the account's resume point (and its
+  // server) can arrive a moment after the page opens. Switch to it unless
+  // the viewer already chose a server or has been watching a while.
+  useEffect(() => {
+    const openedAt = Date.now();
+    return subscribeContinue(() => {
+      if (userPickedRef.current || Date.now() - openedAt > ADOPT_WINDOW_MS) return;
+      const saved = lastServerFor(Number(tmdbId), type);
+      if (!saved || saved === savedServerRef.current) return;
+      savedServerRef.current = saved;
+      if (saved !== serverRef.current && list.some((s) => s.id === saved)) {
+        loadServer(saved, true);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmdbId, type]);
 
   // Continue Watching gate — the entry is written only on genuine
   // engagement, never on mere page view / embed render:
@@ -358,8 +398,9 @@ export default function Player({
               role="radio"
               aria-checked={server === s.id}
               onClick={() => {
+                userPickedRef.current = true;
                 loadServer(s.id, true);
-                persist();
+                persist(season, episode, s.id);
               }}
               className={cn(
                 'shrink-0 snap-start rounded-full px-3 py-1.5 text-[13px] font-medium transition',
@@ -536,8 +577,8 @@ export default function Player({
           {nextUntried && (
             <button
               onClick={() => {
-                autoAdvance();
-                persist();
+                userPickedRef.current = true;
+                persist(season, episode, autoAdvance() ?? server);
               }}
               className="shrink-0 rounded-full bg-accent/15 px-4 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25"
             >

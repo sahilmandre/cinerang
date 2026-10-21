@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import Link from 'next/link';
 import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import SyncProvider from '@/components/SyncProvider';
 import { Analytics } from '@vercel/analytics/next';
 
 const inter = Inter({
@@ -58,8 +60,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               third-party servers you configure — ensure you have rights to play it
               in your region.
             </p>
+            <Link
+              href="/privacy"
+              className="mt-3 inline-block text-xs font-semibold text-white/45 transition hover:text-accent"
+            >
+              Privacy Policy
+            </Link>
           </div>
         </footer>
+        <SyncProvider />
         <Analytics />
       </body>
     </html>
