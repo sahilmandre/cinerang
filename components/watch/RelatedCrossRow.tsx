@@ -13,13 +13,18 @@ export default async function RelatedCrossRow({
   type,
   title,
   limit = 12,
+  adult = false,
 }: {
   details: any;
   type: RelatedMedia;
   title: string;
   limit?: number;
+  /** 18+ source: the row comes from the mature catalog. */
+  adult?: boolean;
 }) {
-  const items = await getCrossTitles(details, type, { limit });
+  const items = await getCrossTitles(details, type, { limit, adult });
   if (items.length === 0) return null;
-  return <Row title={title} items={items} type={type === 'movie' ? 'tv' : 'movie'} />;
+  return (
+    <Row title={title} items={items} type={type === 'movie' ? 'tv' : 'movie'} markAdult={adult} />
+  );
 }

@@ -46,7 +46,7 @@ export default async function WatchMovie({ params }: { params: { id: string } })
   const trailer = d.videos?.results?.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
   // Blends TMDB's `similar` + `recommendations` and re-ranks them against
   // this film's genres, so the row shows genuinely comparable titles.
-  const related = await getRelatedTitles(d, 'movie', { limit: 18 });
+  const related = await getRelatedTitles(d, 'movie', { limit: 18, adult });
   return (
     <div className="pb-2">
       <TitleHeader
@@ -106,7 +106,7 @@ export default async function WatchMovie({ params }: { params: { id: string } })
           text={(d.credits?.cast ?? []).slice(0, 8).map((c: any) => c.name).join(', ')}
         />
         <div className="min-w-0 lg:col-span-3">
-          <Row title="More like this" items={related} type="movie" />
+          <Row title="More like this" items={related} type="movie" markAdult={adult} />
         </div>
         <div className="min-w-0 lg:col-span-3">
           <Suspense fallback={null}>
@@ -114,6 +114,7 @@ export default async function WatchMovie({ params }: { params: { id: string } })
               details={d}
               type="movie"
               title="Series with a similar vibe"
+              adult={adult}
             />
           </Suspense>
         </div>

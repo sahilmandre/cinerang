@@ -21,9 +21,16 @@
  * second, cross-media row pairs a series with films that share its themes
  * (and a film with series), because TMDB's keyword namespace is shared
  * across both.
+ *
+ * 18+ titles take a separate path (`adult: true`). The mainstream pools
+ * exclude the mature catalog and the junk filter drops its low-vote titles,
+ * so measured on live data only 1 of 108 "More like this" picks for 18+
+ * titles was 18+ itself. Their rows are drawn from the mature catalog
+ * instead: same brand, TMDB's own picks where they agree with it, then
+ * theme, language and genre.
  */
 
-import { tmdb } from './tmdb';
+import { tmdb, adultBrandsOf, EROTIC_KEYWORD } from './tmdb';
 import {
   TMDB_MOVIE_GENRES,
   TMDB_TV_GENRES,
@@ -119,7 +126,16 @@ const VOTE_SPAM_MIN_VOTES = 40;
 const UNKNOWN_VOTE_COUNT = 25;
 const UNKNOWN_POPULARITY = 10;
 
-type Origin = 'recommendations' | 'similar' | 'keyword' | 'genre';
+type Origin =
+  | 'recommendations'
+  | 'similar'
+  | 'keyword'
+  | 'genre'
+  // 18+ pools (see adultRelated)
+  | 'brand'
+  | 'theme'
+  | 'language'
+  | 'catalog';
 
 /** Where a candidate came from — TMDB's two related endpoints rank highest. */
 const ORIGIN_WEIGHT: Record<Origin, number> = {
@@ -127,6 +143,10 @@ const ORIGIN_WEIGHT: Record<Origin, number> = {
   similar: 22,
   genre: 14,
   keyword: 12,
+  brand: 26, // same studio: Vivamax with Vivamax, Ullu with Ullu
+  theme: 20, // shares the title's most specific keyword
+  language: 18,
+  catalog: 6, // popular in the 18+ catalog, nothing more specific
 };
 
 /** Diminishing points per shared genre, so a 3-genre match cannot run away. */
@@ -326,7 +346,9 @@ function reasonFor(shared: number[], type: RelatedMedia): string | undefined {
 function collect(
   pools: { origin: Origin; items: any[] }[],
   source: SourceProfile,
-  type: RelatedMedia
+  type: RelatedMedia,
+  /** Keep low-vote titles — normal in the 18+ catalog, not noise there. */
+  keepUnrated = false
 ): Scored[] {
   const seen = new Set<number>();
   const out: Scored[] = [];
@@ -336,7 +358,7 @@ function collect(
       if (!item) continue;
       if (item.id === source.id || seen.has(item.id)) continue;
       seen.add(item.id);
-      if (isJunk(item)) continue;
+      if (!keepUnrated && isJunk(item)) continue;
       out.push({ item, origin: pool.origin, score: 0, shared: [] });
     }
   }
@@ -354,8 +376,10 @@ function rank(
   source: SourceProfile,
   type: RelatedMedia,
   weights: Map<number, number>,
-  limit: number
+  limit: number,
+  tuning: { languagePoints?: number; bonus?: (item: RelatedItem) => number } = {}
 ): RelatedItem[] {
+  const languagePoints = tuning.languagePoints ?? LANGUAGE_POINTS;
   const ordered = Array.from(weights.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id);
@@ -378,8 +402,9 @@ function rank(
       source.language &&
       item.original_language === source.language
     ) {
-      score += LANGUAGE_POINTS;
+      score += languagePoints;
     }
+    score += tuning.bonus?.(item) ?? 0;
     return { ...entry, score, shared };
   });
 
@@ -477,6 +502,75 @@ function crossTypeWeights(
 export interface RelatedOptions {
   /** How many titles to return. */
   limit?: number;
+  /** The source is 18+ — match inside the mature catalog (see adultRelated). */
+  adult?: boolean;
+}
+
+/** In the 18+ catalog, the shared language matters as much as a genre. */
+const ADULT_LANGUAGE_POINTS = 16;
+/** Each further 18+ pool a title also turned up in is more evidence. */
+const ADULT_OVERLAP_POINTS = 4;
+
+/**
+ * Related titles for an 18+ title, `to` being the media type of the row.
+ * Every pool is mature by construction (brand, or the erotic keyword), so
+ * nothing from the main catalog can fill the row; TMDB's own related lists
+ * only count where they agree with those pools.
+ */
+async function adultRelated(
+  details: any,
+  from: RelatedMedia,
+  to: RelatedMedia,
+  limit: number
+): Promise<RelatedItem[]> {
+  const source = readSource(details, from);
+  const weights =
+    from === to ? sameTypeWeights(source) : crossTypeWeights(from, to, source.genres);
+  const signatureGenre = Array.from(weights.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const theme = pickKeywords(
+    { ...source, keywords: source.keywords.filter((k) => k.id !== EROTIC_KEYWORD) },
+    1
+  )[0];
+  const erotic = `with_keywords=${EROTIC_KEYWORD}`;
+
+  const queries: { origin: Origin; filters: string; page?: number }[] = [
+    ...adultBrandsOf(details).flatMap((brand) => [
+      { origin: 'brand' as const, filters: `with_companies=${brand}` },
+      { origin: 'brand' as const, filters: `with_companies=${brand}`, page: 2 },
+    ]),
+    // Comma = AND: erotic *and* this title's own theme.
+    ...(theme ? [{ origin: 'theme' as const, filters: `with_keywords=${EROTIC_KEYWORD},${theme.id}` }] : []),
+    ...(source.language
+      ? [{ origin: 'language' as const, filters: `${erotic}&with_original_language=${source.language}` }]
+      : []),
+    ...(signatureGenre != null
+      ? [{ origin: 'genre' as const, filters: `${erotic}&with_genres=${signatureGenre}` }]
+      : []),
+    { origin: 'catalog', filters: erotic },
+  ];
+  const results = await Promise.all(
+    queries.map((q) => safe(tmdb.adultDiscover(to, q.filters, q.page ?? 1)))
+  );
+  const pools = queries.map((q, i) => ({ origin: q.origin, items: results[i] }));
+
+  const hits = new Map<number, number>();
+  for (const pool of pools) {
+    for (const id of Array.from(new Set<number>(pool.items.map((x: any) => x?.id)))) {
+      hits.set(id, (hits.get(id) ?? 0) + 1);
+    }
+  }
+  if (from === to) {
+    const agreed = [
+      ...(details?.recommendations?.results ?? []),
+      ...(details?.similar?.results ?? []),
+    ].filter((x: any) => x?.adult === true || hits.has(x?.id));
+    pools.unshift({ origin: 'recommendations', items: agreed });
+  }
+
+  return rank(collect(pools, source, to, true), source, to, weights, limit, {
+    languagePoints: ADULT_LANGUAGE_POINTS,
+    bonus: (item) => Math.max(0, (hits.get(item.id) ?? 1) - 1) * ADULT_OVERLAP_POINTS,
+  });
 }
 
 /**
@@ -493,6 +587,7 @@ export async function getRelatedTitles(
   options: RelatedOptions = {}
 ): Promise<RelatedItem[]> {
   const limit = options.limit ?? 18;
+  if (options.adult) return adultRelated(details, type, type, limit);
   const source = readSource(details, type);
   const keywords = pickKeywords(source);
 
@@ -537,9 +632,10 @@ export async function getCrossTitles(
 ): Promise<RelatedItem[]> {
   const limit = options.limit ?? 12;
   if (limit <= 0) return [];
+  const other: RelatedMedia = type === 'movie' ? 'tv' : 'movie';
+  if (options.adult) return adultRelated(details, type, other, limit);
   const source = readSource(details, type);
   const keywords = pickKeywords(source);
-  const other: RelatedMedia = type === 'movie' ? 'tv' : 'movie';
   const weights = crossTypeWeights(type, other, source.genres);
   // Most distinctive first, so the slice below queries the right two.
   const targetGenres = Array.from(weights.keys()).sort(

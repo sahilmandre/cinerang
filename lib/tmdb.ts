@@ -19,8 +19,11 @@ export const isTmdbNotFound = (e: unknown) =>
 
 // 18+ producers whose catalogs are mature by brand (verified Oct 2026).
 const ADULT_COMPANIES = new Set([149142, 173083, 134066]); // Vivamax, Vivamax Original Series, Ullu
+// One brand can span films and series (Vivamax films + Vivamax Original Series).
+const ADULT_BRANDS = [[149142, 173083], [134066]];
 // TMDB "erotic" keyword used for the 18+ movie/series rows.
-const ADULT_KEYWORDS = new Set([256466]);
+export const EROTIC_KEYWORD = 256466;
+const ADULT_KEYWORDS = new Set([EROTIC_KEYWORD]);
 // Keeps those titles out of the main catalog's discover lists (TMDB flags
 // them `adult: false`, so include_adult=false alone lets them through).
 // Verified Oct 2026: removes all Vivamax/Ullu/erotic-keyword results.
@@ -202,7 +205,22 @@ export const tmdb = {
     ),
   searchAdult: (q: string, page = 1) =>
     tmdbFetch(`/search/multi?query=${encodeURIComponent(q)}&include_adult=true&page=${page}`, TTL.search),
+  // 18+ related rows: popularity-sorted discovery inside the mature catalog
+  // (brand, or the erotic keyword plus a language / genre / theme filter).
+  adultDiscover: (type: 'movie' | 'tv', filters: string, page = 1) =>
+    tmdbFetch(
+      `/discover/${type}?${filters}&include_adult=true&sort_by=popularity.desc&page=${page}`,
+      TTL.catalog
+    ),
 };
+
+/** The 18+ brands a title belongs to, as `with_companies` OR-lists. */
+export function adultBrandsOf(d: any): string[] {
+  const ids = new Set<number>((d?.production_companies ?? []).map((c: any) => c.id));
+  return ADULT_BRANDS.filter((brand) => brand.some((id) => ids.has(id))).map((brand) =>
+    brand.join('|')
+  );
+}
 
 
 /**

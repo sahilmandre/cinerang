@@ -76,7 +76,7 @@ export default async function WatchTV({
     tmdb.tvExternalIds(params.id).catch(() => null),
     // Blends TMDB's `similar` + `recommendations` and re-ranks them against
     // this series' genres, so the row shows genuinely comparable shows.
-    getRelatedTitles(d, 'tv', { limit: 18 }),
+    getRelatedTitles(d, 'tv', { limit: 18, adult }),
   ]);
   const episodeCount: number | undefined =
     seasonData?.episodes?.length ||
@@ -268,11 +268,11 @@ export default async function WatchTV({
           clamp
         />
         <div className="min-w-0 lg:col-span-3">
-          <Row title="More like this" items={related} type="tv" />
+          <Row title="More like this" items={related} type="tv" markAdult={adult} />
         </div>
         <div className="min-w-0 lg:col-span-3">
           <Suspense fallback={null}>
-            <RelatedCrossRow details={d} type="tv" title="Movies with a similar vibe" />
+            <RelatedCrossRow details={d} type="tv" title="Movies with a similar vibe" adult={adult} />
           </Suspense>
         </div>
       </div>
