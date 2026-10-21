@@ -182,6 +182,13 @@ function syncNow() {
 
 /** Debounced: 1.5 s after the last change, at most 10 s after the first. */
 function schedulePush() {
+  // A change while the tab is hidden (the player saving its position as the
+  // tab closes) may be the last chance to send anything.
+  if (document.visibilityState === 'hidden') {
+    clearTimers();
+    void enqueue(() => pushAll(true));
+    return;
+  }
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(flush, PUSH_DEBOUNCE_MS);
   maxWaitTimer ??= setTimeout(flush, PUSH_MAX_WAIT_MS);

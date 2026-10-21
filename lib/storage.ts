@@ -35,9 +35,9 @@ export function clearContinue() {
   commit({ t: 'continue.clear' });
 }
 
-/** The video server a title was last watched on, if it was resumed before. */
-export function lastServerFor(id: number, mediaType: Kind): string | undefined {
-  return getContinue().find((x) => x.id === id && x.mediaType === mediaType)?.server;
+/** A title's resume point: episode, server and position, if it has one. */
+export function savedEntryFor(id: number, mediaType: Kind): ContinueItem | undefined {
+  return getContinue().find((x) => x.id === id && x.mediaType === mediaType);
 }
 
 /** Calls `onChange` when Continue Watching changes here, in another tab or by sync. */

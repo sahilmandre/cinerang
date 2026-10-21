@@ -223,7 +223,20 @@ export function commit(body: OpBody): SyncData {
   persist(prev, next);
   const sync = readSyncState();
   if (sync.ownerId) {
-    updateSyncState({ outbox: [...sync.outbox, op] });
+    // Playback saves a resume point every minute; a newer one for the same
+    // title makes any still-queued older one redundant.
+    const outbox =
+      op.t === 'continue.upsert'
+        ? sync.outbox.filter(
+            (queued) =>
+              !(
+                queued.t === 'continue.upsert' &&
+                queued.item.id === op.item.id &&
+                queued.item.mediaType === op.item.mediaType
+              )
+          )
+        : sync.outbox;
+    updateSyncState({ outbox: [...outbox, op] });
     onRecord?.();
   }
   return next;

@@ -267,6 +267,26 @@ runtime and local Node 24 both qualify.
   its server — unless the viewer already picked one.
 - Small "Sign in to sync … across devices" hint on the Taste and Watchlist pages for guests.
 
+### Resume: episode, server, time (added 2026-10-21)
+
+- **Episode.** A series opened without `?s=&e=` (any card) jumps to the saved episode.
+  Picking an episode from the list records it at once; season tabs (`?s=` only) don't.
+  If the player moves to another episode by itself (its own next button / episode
+  menu) and reports it, CineRang follows — controls, URL, Continue Watching — without
+  reloading the frame.
+- **Server.** The saved server is used on open. If it fails to load, failover moves on
+  and says so, with "Try <server> again".
+- **Time.** Cross-origin players can't be inspected; the position comes from players
+  that post VidLink-style `PLAYER_EVENT` messages (`lib/playback.ts`, accepted only from
+  the player frame / its own site). Saved at most once a minute while playing, on pause,
+  and when the tab is hidden or left; synced like any other change (queued resume
+  points for the same title are collapsed). Reaching the credits moves the resume point
+  to the next episode.
+- **Resuming.** Servers with a documented `startAt` (VidLink, VidCore — `startAt: true`
+  in `lib/servers.ts`) open at the saved time ("Resuming at 11:40 · Start over"); others
+  show "You left at 11:40 — skip to 11:40 in the player". Continue Watching cards show
+  a progress bar and "left at 11:40".
+
 ## 8. Performance budget
 
 | Metric | Target |

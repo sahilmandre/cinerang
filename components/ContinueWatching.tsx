@@ -11,6 +11,11 @@ import {
   ContinueItem,
 } from '@/lib/storage';
 import { poster } from '@/lib/tmdb-image';
+import { formatTime, resumePoint } from '@/lib/playback';
+import { cn } from '@/lib/utils';
+
+/** Saved position in the saved episode, if it's worth resuming. */
+const positionOf = (c: ContinueItem) => resumePoint(c, c.mediaType, c.season ?? 1, c.episode ?? 1);
 
 export default function ContinueWatching() {
   const [items, setItems] = useState<ContinueItem[]>([]);
@@ -53,7 +58,9 @@ export default function ContinueWatching() {
         tabIndex={0}
         className="no-scrollbar snap-strip -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-3 pt-1 md:gap-4"
       >
-        {items.map((c) => (
+        {items.map((c) => {
+          const pos = positionOf(c);
+          return (
           <div
             key={`${c.mediaType}-${c.id}`}
             className="group relative w-[148px] shrink-0 sm:w-[160px] md:w-[170px]"
@@ -64,7 +71,7 @@ export default function ContinueWatching() {
                   ? `/watch/tv/${c.id}?s=${c.season ?? 1}&e=${c.episode ?? 1}`
                   : `/watch/movie/${c.id}`
               }
-              aria-label={`Resume ${c.title}`}
+              aria-label={`Resume ${c.title}${pos ? ` at ${formatTime(pos.time)}` : ''}`}
               className="block overflow-hidden rounded-2xl bg-card/70 shadow-card transition duration-300 hover:-translate-y-1.5 hover:bg-card hover:shadow-glow hover:ring-1 hover:ring-accent/50 focus-visible:-translate-y-1.5 focus-visible:ring-1 focus-visible:ring-accent/50"
             >
               <div className="relative overflow-hidden bg-white/[0.03]">
@@ -91,15 +98,29 @@ export default function ContinueWatching() {
                   </span>
                 </span>
                 {c.mediaType === 'tv' && c.season != null && (
-                  <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-accent backdrop-blur-md">
+                  <span
+                    className={cn(
+                      'absolute left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-accent backdrop-blur-md',
+                      pos?.duration ? 'bottom-3' : 'bottom-1.5'
+                    )}
+                  >
                     S{c.season} · E{c.episode ?? 1}
                   </span>
                 )}
+                {pos?.duration ? (
+                  <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-white/15">
+                    <span
+                      className="block h-full bg-aurora"
+                      style={{ width: `${Math.min(100, (pos.time / pos.duration) * 100)}%` }}
+                    />
+                  </span>
+                ) : null}
               </div>
               <div className="p-2.5 pb-2">
                 <p className="truncate text-[13px] font-semibold leading-snug">{c.title}</p>
                 <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-white/35">
                   {c.mediaType === 'tv' ? 'Series' : 'Movie'}
+                  {pos ? <span className="normal-case tracking-normal"> · left at {formatTime(pos.time)}</span> : null}
                 </p>
               </div>
             </Link>
@@ -112,7 +133,8 @@ export default function ContinueWatching() {
               <X size={13} aria-hidden />
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

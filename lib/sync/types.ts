@@ -38,6 +38,10 @@ export interface ContinueItem {
   episode?: number;
   /** Video server the title was last played on (lib/servers id). */
   server?: string;
+  /** Seconds into the episode/movie when last saved (players that report it). */
+  time?: number;
+  /** Length in seconds, as reported by the player. */
+  duration?: number;
   updatedAt: number;
 }
 

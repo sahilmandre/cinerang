@@ -29,6 +29,11 @@ export interface VideoServer {
   noSandbox?: boolean;
   /** True when the player offers Hindi-dubbed audio (e.g. Screenscape lan=hindi). */
   hindi?: boolean;
+  /**
+   * Documented `startAt=<seconds>` parameter: the player opens at a resume
+   * point. Others still show the "You left at …" time for a manual skip.
+   */
+  startAt?: boolean;
   movieUrl: (tmdbId: string) => string;
   tvUrl: (tmdbId: string, season: number, episode: number) => string;
 }
@@ -45,6 +50,9 @@ export const SERVERS: VideoServer[] = [
     name: 'VidLink',
     // Refuses sandboxed iframes — loads direct, popup-blocker can't apply.
     noSandbox: true,
+    // Docs (vidlink.pro, Oct 2026): `startAt` seconds, and PLAYER_EVENT
+    // postMessages with currentTime/duration — full time resume.
+    startAt: true,
     movieUrl: (id) => `https://vidlink.pro/movie/${id}`,
     tvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}`,
   },
@@ -132,6 +140,9 @@ export const SERVERS: VideoServer[] = [
     name: 'VidCore',
     ads: 'none',
     noSandbox: true,
+    // Docs: `startAt` seconds. Its events (vidcore:play/pause/ended) carry
+    // no time, so a position must come from another player.
+    startAt: true,
     movieUrl: (id) => `https://vidcore.org/embed/movie/${id}`,
     tvUrl: (id, s, e) => `https://vidcore.org/embed/tv/${id}/${s}/${e}`,
   },
@@ -186,8 +197,12 @@ export function getEmbedUrl(
   type: MediaType,
   tmdbId: string,
   season = 1,
-  episode = 1
+  episode = 1,
+  /** Resume point in seconds; applied only by servers that support it. */
+  startAt = 0
 ): string {
   const s = SERVERS.find((x) => x.id === serverId) ?? SERVERS[0];
-  return type === 'movie' ? s.movieUrl(tmdbId) : s.tvUrl(tmdbId, season, episode);
+  const url = type === 'movie' ? s.movieUrl(tmdbId) : s.tvUrl(tmdbId, season, episode);
+  if (!s.startAt || startAt < 1) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}startAt=${Math.floor(startAt)}`;
 }

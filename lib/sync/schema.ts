@@ -30,6 +30,8 @@ const item = z.object({
     .string()
     .regex(/^[a-z0-9-]{1,40}$/)
     .optional(),
+  time: z.number().int().min(0).max(86_400).optional(),
+  duration: z.number().int().positive().max(86_400).optional(),
   updatedAt: z.number().int().nonnegative(),
 });
 

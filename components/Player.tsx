@@ -1,15 +1,34 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Play, RotateCcw, ShieldCheck, ShieldOff, SquareArrowOutUpRight } from 'lucide-react';
+import {
+  History,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+  ShieldOff,
+  SquareArrowOutUpRight,
+  X,
+} from 'lucide-react';
 import { SERVERS, getEmbedUrl, MediaType, ADULT_DEFAULT_SERVER, orderedServers } from '@/lib/servers';
 import {
   getPopupBlock,
-  lastServerFor,
+  savedEntryFor,
   saveContinue,
   setPopupBlock,
   subscribeContinue,
 } from '@/lib/storage';
+import {
+  formatTime,
+  fromPlayerFrame,
+  isFinished,
+  readProgress,
+  resumePoint,
+  MIN_RESUME_S,
+  type PlayerProgress,
+  type Position,
+} from '@/lib/playback';
+import type { ContinueItem } from '@/lib/sync/types';
 import { cn } from '@/lib/utils';
 
 // If a frame neither loads nor errors within this window, treat it as dead
@@ -17,21 +36,33 @@ import { cn } from '@/lib/utils';
 const LOAD_TIMEOUT_MS = 15000;
 
 // A resume point synced from another device can land just after the page
-// opens; within this window (and before the viewer picks a server) the
-// player switches to the server saved with it.
+// opens; within this window (and before the viewer picks a server or starts
+// playing) the player switches to it.
 const ADOPT_WINDOW_MS = 15000;
 
 // Continue Watching gating: a title counts as "being watched" only after
-// sustained visible engagement. Cross-origin embeds expose no play events,
-// so these two observable proxies are used instead.
+// sustained visible engagement. Most cross-origin embeds expose no play
+// events, so these observable proxies are used instead.
 const DWELL_MS = 150000; // 2.5 min of visible, loaded player
 const DWELL_TICK_MS = 5000;
+
+// Players that report their position: it is saved at most once a minute
+// while playing, plus on pause and when the tab is hidden or left.
+const SAVE_EVERY_S = 60;
+// A known position stops being trusted once the viewer has watched this long
+// on a player that doesn't report time — they are somewhere else by now.
+const STALE_AFTER_MS = 30000;
 
 export interface SeasonInfo {
   number: number;
   /** Episode count; 0 when TMDB doesn't know yet. */
   episodes: number;
 }
+
+const whole = ({ time, duration }: Position): Position => ({
+  time: Math.floor(time),
+  duration: duration ? Math.round(duration) : undefined,
+});
 
 export default function Player({
   tmdbId,
@@ -43,6 +74,8 @@ export default function Player({
   seasons = [],
   defaultServer,
   adult = false,
+  resumeSaved = false,
+  episodeChosen = false,
 }: {
   tmdbId: string;
   type: MediaType;
@@ -54,6 +87,10 @@ export default function Player({
   seasons?: SeasonInfo[];
   defaultServer?: string;
   adult?: boolean;
+  /** The URL named no episode (opened from a card): resume the saved one. */
+  resumeSaved?: boolean;
+  /** The URL names an episode (`e`): picking one from the list records it. */
+  episodeChosen?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -62,13 +99,14 @@ export default function Player({
   // starts where the copy is most likely to exist — no blind trial.
   const list = orderedServers(adult);
   const recommended = adult ? (defaultServer ?? ADULT_DEFAULT_SERVER) : null;
+  const nameOf = (id: string | null) => list.find((s) => s.id === id)?.name ?? id;
   // Popup-blocker: sandboxed frame kills popups + tab-hijacks while
   // keeping scripts/storage alive. Cross-origin players can't escape it.
   // Defaults off; VidFast/VidLink refuse sandboxed frames and load direct.
   const [blocker, setBlocker] = useState(false);
   // The frame isn't rendered until the saved preferences are read —
-  // otherwise it starts loading unsandboxed (or on the default server),
-  // then remounts (double load).
+  // otherwise it starts loading unsandboxed (or on the default server, or
+  // episode), then remounts (double load).
   const [prefReady, setPrefReady] = useState(false);
   const toggleBlocker = () => {
     const next = !blocker;
@@ -84,8 +122,24 @@ export default function Player({
   // must never override that choice.
   const userPickedRef = useRef(false);
   const savedServerRef = useRef<string | undefined>(undefined);
+  // The saved server failed to load and auto-failover moved on from it.
+  const [movedFrom, setMovedFrom] = useState<string | null>(null);
+  // The episode being watched (controls, URL, Continue Watching) …
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
+  const seasonRef = useRef(season);
+  seasonRef.current = season;
+  const episodeRef = useRef(episode);
+  episodeRef.current = episode;
+  // … and the one the frame was loaded with. They differ only when the
+  // player moved on by itself (its own next button or episode menu) — then
+  // the frame keeps playing instead of reloading.
+  const [frameEp, setFrameEp] = useState<[number, number]>([initialSeason, initialEpisode]);
+  const followedRef = useRef<[number, number] | null>(null);
+  const frameStartedAtRef = useRef(0);
+  const firstUrlSyncRef = useRef(true);
+  // As opened — once resumed, the URL names the episode.
+  const resumeSavedRef = useRef(resumeSaved);
   const [seasonDraft, setSeasonDraft] = useState(String(initialSeason));
   const [episodeDraft, setEpisodeDraft] = useState(String(initialEpisode));
   const [key, setKey] = useState(0);
@@ -107,7 +161,24 @@ export default function Player({
   // tabs and never-loaded embeds don't count.
   const dwellAccumRef = useRef(0);
   const dwellFiredRef = useRef(false);
+  // Same clock, but per frame load (server switch / reload resets it).
+  const frameWatchMsRef = useRef(0);
   const persistRef = useRef(() => {});
+  const frameRef = useRef<HTMLIFrameElement>(null);
+
+  // Playback position. `startAt` goes into the embed URL of players that
+  // can open at a time; `note` is the "You left at …" banner.
+  const [startAt, setStartAt] = useState(0);
+  const [note, setNote] = useState<Position | null>(null);
+  const savedPosRef = useRef<Position | null>(null);
+  // Latest position reported by a player during this visit.
+  const progressRef = useRef<(PlayerProgress & { server: string }) | null>(null);
+  const lastSavedTimeRef = useRef(-1);
+  const finishedRef = useRef(false);
+  // Our own saves fire the Continue Watching event too — not a sync.
+  const writingRef = useRef(false);
+  const adoptedAtRef = useRef(0);
+
   const current = list.find((s) => s.id === server);
   const sandboxed = blocker && !!current && !current.noSandbox;
   // Direct frames sit under the click-to-play cover until the user clicks
@@ -115,62 +186,57 @@ export default function Player({
   const canPlayRef = useRef(false);
   canPlayRef.current = sandboxed || !shield;
 
-  // Keep local S/E in sync when the URL changes (season / episode links).
+  const showResume = (pos: Position | null) => {
+    savedPosRef.current = pos;
+    setNote(pos);
+    setStartAt(pos?.time ?? 0);
+  };
+
+  /** A different episode: positions reported so far belong to the old one. */
+  const resetProgress = () => {
+    progressRef.current = null;
+    lastSavedTimeRef.current = -1;
+    finishedRef.current = false;
+  };
+
+  // Keep local S/E in sync when the URL changes (season / episode links),
+  // and offer the saved position if that episode was left part-way.
   useEffect(() => {
+    const first = firstUrlSyncRef.current;
+    firstUrlSyncRef.current = false;
+    const followed = followedRef.current;
+    followedRef.current = null;
+    // Our own URL update after following the player: it is already showing
+    // this episode — don't reload the frame.
+    if (followed && followed[0] === initialSeason && followed[1] === initialEpisode) return;
+    const changed = initialSeason !== seasonRef.current || initialEpisode !== episodeRef.current;
     setSeason(initialSeason);
     setEpisode(initialEpisode);
+    setFrameEp([initialSeason, initialEpisode]);
     setSeasonDraft(String(initialSeason));
     setEpisodeDraft(String(initialEpisode));
+    if (changed) resetProgress();
+    const pos = resumePoint(savedEntryFor(Number(tmdbId), type), type, initialSeason, initialEpisode);
+    showResume(pos);
+    // Picked from the episode list on this page: that's choosing what to
+    // watch, like "Next episode" — record it now. (Season tabs carry no `e`.)
+    if (!first && changed && episodeChosen) {
+      persist(initialSeason, initialEpisode, serverRef.current, pos);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSeason, initialEpisode]);
 
-  const episodeKey = `${tmdbId}-${season}-${episode}`;
+  // Per frame load: failover list, loading state, engagement clock.
+  const frameKey = `${tmdbId}-${frameEp[0]}-${frameEp[1]}`;
   useEffect(() => {
     triedRef.current = [server];
     setExhausted(false);
     markLoaded(false);
     dwellAccumRef.current = 0;
     dwellFiredRef.current = false;
+    setMovedFrom(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [episodeKey]);
-
-  // A title resumes on the server it was last watched on (saved with
-  // Continue Watching and synced to the account). Read after mount —
-  // localStorage isn't available during SSR — and declared after the
-  // episode reset above, which seeds triedRef with the default server.
-  useEffect(() => {
-    setBlocker(getPopupBlock());
-    const saved = lastServerFor(Number(tmdbId), type);
-    savedServerRef.current = saved;
-    if (saved && saved !== serverRef.current && list.some((s) => s.id === saved)) {
-      triedRef.current = [saved];
-      setServer(saved);
-    }
-    setPrefReady(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tmdbId, type]);
-
-  // Load-timeout failover: complements onError for silent network failures.
-  // Reads loadedRef instead of a setState updater (updaters must be pure —
-  // StrictMode double-invokes them, which used to skip a server).
-  useEffect(() => {
-    markLoaded(false);
-    const t = setTimeout(() => {
-      if (!loadedRef.current) autoAdvanceRef.current();
-    }, LOAD_TIMEOUT_MS);
-    return () => clearTimeout(t);
-    // `sandboxed` is in the iframe key, so a toggle remounts the frame and
-    // needs a fresh loading state + timeout too.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server, episodeKey, key, sandboxed]);
-
-  // Ad-click shield: covers direct (unsandboxed) frames so the first click
-  // — the one most likely to call window.open() — hits our button, not the
-  // 3rd-party player. Re-armed on every server/episode/reload/blocker change.
-  useEffect(() => {
-    setShield(true);
-  }, [server, episodeKey, key, sandboxed]);
-
-  const url = getEmbedUrl(server, type, tmdbId, season, episode);
+  }, [frameKey]);
 
   // Sync TV position back to the URL so refresh / share opens the same episode.
   const syncUrl = (s: number, e: number) => {
@@ -180,6 +246,139 @@ export default function Player({
     } catch {
       /* non-fatal */
     }
+  };
+
+  const seasonInfo = (s: number) => seasons.find((x) => x.number === s);
+
+  /** Snaps S/E to the show's real seasons and episode counts. */
+  const clampSeasonEp = (s: number, e: number): [number, number] => {
+    let safeS = Math.max(0, Math.floor(s) || 0);
+    if (seasons.length && !seasonInfo(safeS)) {
+      // Unknown season: snap to the nearest season that exists.
+      safeS = seasons.reduce((best, x) =>
+        Math.abs(x.number - safeS) < Math.abs(best.number - safeS) ? x : best
+      ).number;
+    }
+    if (!seasons.length) safeS = Math.max(1, safeS);
+    const max = seasonInfo(safeS)?.episodes || Infinity;
+    const safeE = Math.min(max, Math.max(1, Math.floor(e) || 1));
+    return [safeS, safeE];
+  };
+
+  /** Loads an episode in the frame (callers decide whether to record it). */
+  const goTo = (s: number, e: number) => {
+    setSeason(s);
+    setEpisode(e);
+    setFrameEp([s, e]);
+    setSeasonDraft(String(s));
+    setEpisodeDraft(String(e));
+    resetProgress();
+    syncUrl(s, e);
+  };
+
+  /**
+   * The player moved to another episode by itself (its own next button or
+   * episode menu): follow it — controls, URL, Continue Watching — without
+   * reloading the frame that is already playing it.
+   */
+  const followPlayer = (s: number, e: number) => {
+    followedRef.current = [s, e];
+    seasonRef.current = s;
+    episodeRef.current = e;
+    setSeason(s);
+    setEpisode(e);
+    setSeasonDraft(String(s));
+    setEpisodeDraft(String(e));
+    resetProgress();
+    savedPosRef.current = null;
+    setNote(null);
+    syncUrl(s, e);
+  };
+
+  /**
+   * Applies a title's saved resume point: the episode (when the URL named
+   * none), the server it was playing on, and the position in it.
+   */
+  const adoptSaved = (entry: ContinueItem | undefined) => {
+    adoptedAtRef.current = entry?.updatedAt ?? 0;
+    savedServerRef.current = entry?.server;
+    let s = seasonRef.current;
+    let e = episodeRef.current;
+    if (type === 'tv' && resumeSavedRef.current && entry?.season != null) {
+      [s, e] = clampSeasonEp(entry.season, entry.episode ?? 1);
+      if (s !== seasonRef.current || e !== episodeRef.current) goTo(s, e);
+    }
+    showResume(resumePoint(entry, type, s, e));
+    const saved = entry?.server;
+    if (saved && saved !== serverRef.current && list.some((x) => x.id === saved)) {
+      triedRef.current = [saved];
+      setServer(saved);
+    }
+    markLoaded(false);
+    setKey((k) => k + 1);
+  };
+
+  // Read after mount — localStorage isn't available during SSR — and
+  // declared after the episode reset above, which seeds triedRef with the
+  // default server.
+  useEffect(() => {
+    setBlocker(getPopupBlock());
+    adoptSaved(savedEntryFor(Number(tmdbId), type));
+    setPrefReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmdbId, type]);
+
+  // Load-timeout failover: complements onError for silent network failures.
+  // Reads loadedRef instead of a setState updater (updaters must be pure —
+  // StrictMode double-invokes them, which used to skip a server).
+  useEffect(() => {
+    markLoaded(false);
+    frameWatchMsRef.current = 0;
+    frameStartedAtRef.current = Date.now();
+    const t = setTimeout(() => {
+      if (!loadedRef.current) autoAdvanceRef.current();
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+    // `sandboxed` is in the iframe key, so a toggle remounts the frame and
+    // needs a fresh loading state + timeout too.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server, frameKey, key, sandboxed]);
+
+  // Ad-click shield: covers direct (unsandboxed) frames so the first click
+  // — the one most likely to call window.open() — hits our button, not the
+  // 3rd-party player. Re-armed on every server/episode/reload/blocker change.
+  useEffect(() => {
+    setShield(true);
+  }, [server, frameKey, key, sandboxed]);
+
+  const url = getEmbedUrl(server, type, tmdbId, frameEp[0], frameEp[1], startAt);
+
+  /** Best known position in the current episode right now. */
+  const currentPosition = (): Position | null => {
+    const p = progressRef.current;
+    if (p && p.server === serverRef.current) return whole(p);
+    // From the previous server, or the saved resume point: still right
+    // unless the viewer has been watching here without time reports.
+    const known = p ?? savedPosRef.current;
+    return known && frameWatchMsRef.current < STALE_AFTER_MS ? whole(known) : null;
+  };
+
+  /** The next frame load continues from where the viewer is now. */
+  const resumeHere = () => {
+    const pos = currentPosition();
+    const keep = pos && pos.time >= MIN_RESUME_S && !isFinished(pos.time, pos.duration) ? pos : null;
+    setStartAt(keep?.time ?? 0);
+    setNote(keep);
+  };
+
+  const startOver = () => {
+    savedPosRef.current = null;
+    progressRef.current = null;
+    lastSavedTimeRef.current = -1;
+    setStartAt(0);
+    setNote(null);
+    markLoaded(false);
+    setKey((k) => k + 1);
   };
 
   const loadServer = (id: string, resetTried = false) => {
@@ -202,6 +401,11 @@ export default function Player({
       return null;
     }
     const next = remaining[0];
+    // Leaving the server this title was resumed on: say so, offer the way back.
+    if (!userPickedRef.current && serverRef.current === savedServerRef.current) {
+      setMovedFrom(serverRef.current);
+    }
+    resumeHere();
     triedRef.current.push(next);
     setServer(next);
     markLoaded(false);
@@ -214,32 +418,52 @@ export default function Player({
   const nextUntried = list.map((s) => s.id).find((id) => !triedRef.current.includes(id));
   const nextName = list.find((s) => s.id === nextUntried)?.name;
 
-  const persist = (s = season, e = episode, srv = server) =>
-    saveContinue({
-      id: Number(tmdbId),
-      mediaType: type,
-      title,
-      poster: posterPath,
-      season: s,
-      episode: e,
-      server: srv,
-      updatedAt: Date.now(),
-    });
+  // Next episode, rolling over to the next season's first episode; null on
+  // the series finale. Unknown episode counts allow stepping forward.
+  const nextPosition = ((): [number, number] | null => {
+    const info = seasonInfo(season);
+    if (!info || !info.episodes || episode < info.episodes) return [season, episode + 1];
+    const following = seasons[seasons.indexOf(info) + 1];
+    return following ? [following.number, 1] : null;
+  })();
+
+  /** Saves the resume point: episode, server and (when known) position. */
+  const persist = (
+    s = season,
+    e = episode,
+    srv = server,
+    at: Position | null = s === season && e === episode ? currentPosition() : null
+  ) => {
+    writingRef.current = true;
+    try {
+      saveContinue({
+        id: Number(tmdbId),
+        mediaType: type,
+        title,
+        poster: posterPath,
+        season: s,
+        episode: e,
+        server: srv,
+        ...(at ?? {}),
+        updatedAt: Date.now(),
+      });
+    } finally {
+      writingRef.current = false;
+    }
+  };
   persistRef.current = persist;
 
-  // First visit on another device: the account's resume point (and its
-  // server) can arrive a moment after the page opens. Switch to it unless
-  // the viewer already chose a server or has been watching a while.
+  // First visit on another device: the account's resume point can arrive a
+  // moment after the page opens. Apply it unless the viewer already chose a
+  // server, started playing, or the window has passed.
   useEffect(() => {
     const openedAt = Date.now();
     return subscribeContinue(() => {
-      if (userPickedRef.current || Date.now() - openedAt > ADOPT_WINDOW_MS) return;
-      const saved = lastServerFor(Number(tmdbId), type);
-      if (!saved || saved === savedServerRef.current) return;
-      savedServerRef.current = saved;
-      if (saved !== serverRef.current && list.some((s) => s.id === saved)) {
-        loadServer(saved, true);
-      }
+      if (writingRef.current || userPickedRef.current || progressRef.current) return;
+      if (Date.now() - openedAt > ADOPT_WINDOW_MS) return;
+      const entry = savedEntryFor(Number(tmdbId), type);
+      if (!entry || entry.updatedAt <= adoptedAtRef.current) return;
+      adoptSaved(entry);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tmdbId, type]);
@@ -251,7 +475,8 @@ export default function Player({
   //       cross-origin frames expose no play events, but the parent
   //       document still observes its own iframe going fullscreen),
   //   (c) user drives the player (server switch / episode change persist
-  //       immediately at their call sites).
+  //       immediately at their call sites),
+  //   (d) the player reports real playback progress (below).
   useEffect(() => {
     const onFullscreen = () => {
       if (document.fullscreenElement && !dwellFiredRef.current) {
@@ -261,9 +486,10 @@ export default function Player({
     };
     document.addEventListener('fullscreenchange', onFullscreen);
     const id = window.setInterval(() => {
-      if (dwellFiredRef.current) return;
       if (document.visibilityState !== 'visible') return;
       if (!loadedRef.current || !canPlayRef.current) return;
+      frameWatchMsRef.current += DWELL_TICK_MS;
+      if (dwellFiredRef.current) return;
       dwellAccumRef.current += DWELL_TICK_MS;
       if (dwellAccumRef.current >= DWELL_MS) {
         dwellFiredRef.current = true;
@@ -277,42 +503,81 @@ export default function Player({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const seasonInfo = (s: number) => seasons.find((x) => x.number === s);
-
-  /** Snaps S/E to the show's real seasons and episode counts. */
-  const clampSeasonEp = (s: number, e: number): [number, number] => {
-    let safeS = Math.max(0, Math.floor(s) || 0);
-    if (seasons.length && !seasonInfo(safeS)) {
-      // Unknown season: snap to the nearest season that exists.
-      safeS = seasons.reduce((best, x) =>
-        Math.abs(x.number - safeS) < Math.abs(best.number - safeS) ? x : best
-      ).number;
+  const onProgress = (p: PlayerProgress) => {
+    if (
+      type === 'tv' &&
+      p.season != null &&
+      p.episode != null &&
+      (p.season !== seasonRef.current || p.episode !== episodeRef.current)
+    ) {
+      // Right after we load a frame, a report can still come from the one
+      // it replaced — never follow that back.
+      if (Date.now() - frameStartedAtRef.current < 5000) return;
+      followPlayer(p.season, p.episode);
+      progressRef.current = { ...p, server };
+      lastSavedTimeRef.current = p.time;
+      dwellFiredRef.current = true;
+      persist(p.season, p.episode, server, whole(p));
+      return;
     }
-    if (!seasons.length) safeS = Math.max(1, safeS);
-    const max = seasonInfo(safeS)?.episodes || Infinity;
-    const safeE = Math.min(max, Math.max(1, Math.floor(e) || 1));
-    return [safeS, safeE];
+    if (finishedRef.current) return;
+    progressRef.current = { ...p, server };
+    if (p.event === 'ended' || isFinished(p.time, p.duration)) {
+      // Watched to the end: next time opens the next episode from the start
+      // (a movie or the finale: from the start again).
+      finishedRef.current = true;
+      dwellFiredRef.current = true;
+      setNote(null);
+      if (type === 'tv' && nextPosition) persist(nextPosition[0], nextPosition[1], server, null);
+      else persist(season, episode, server, null);
+      return;
+    }
+    const moved = Math.abs(p.time - lastSavedTimeRef.current);
+    if (p.time >= 1 && (p.event === 'pause' ? moved >= 5 : moved >= SAVE_EVERY_S)) {
+      lastSavedTimeRef.current = p.time;
+      dwellFiredRef.current = true; // real playback counts as watching
+      persist();
+    }
   };
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
 
-  // Next episode, rolling over to the next season's first episode; null on
-  // the series finale. Unknown episode counts allow stepping forward.
-  const nextPosition = ((): [number, number] | null => {
-    const info = seasonInfo(season);
-    if (!info || !info.episodes || episode < info.episodes) return [season, episode + 1];
-    const following = seasons[seasons.indexOf(info) + 1];
-    return following ? [following.number, 1] : null;
-  })();
+  // Position reports from the player, and a final save when the tab is
+  // hidden or the page is left.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (!fromPlayerFrame(e, frameRef.current)) return;
+      const p = readProgress(e.data, { tmdbId: Number(tmdbId) });
+      if (p) onProgressRef.current(p);
+    };
+    const saveNow = () => {
+      const p = progressRef.current;
+      if (!p || finishedRef.current || Math.abs(p.time - lastSavedTimeRef.current) < 5) return;
+      lastSavedTimeRef.current = p.time;
+      persistRef.current();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    window.addEventListener('message', onMessage);
+    // Capture phase: runs before the sync engine's hidden-tab upload.
+    document.addEventListener('visibilitychange', onVisibility, true);
+    window.addEventListener('pagehide', saveNow);
+    return () => {
+      saveNow(); // leaving the page inside the app
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', onVisibility, true);
+      window.removeEventListener('pagehide', saveNow);
+    };
+  }, [tmdbId, type]);
 
   const setSeasonEp = (s: number, e: number) => {
     const [safeS, safeE] = clampSeasonEp(s, e);
-    setSeason(safeS);
-    setEpisode(safeE);
-    setSeasonDraft(String(safeS));
-    setEpisodeDraft(String(safeE));
+    goTo(safeS, safeE);
+    showResume(null);
     markLoaded(false);
     setKey((k) => k + 1);
-    persist(safeS, safeE);
-    syncUrl(safeS, safeE);
+    persist(safeS, safeE, server, null);
   };
 
   // Draft text for the S/E fields: committing on every keystroke used to
@@ -329,6 +594,8 @@ export default function Player({
       setEpisodeDraft(String(e));
     }
   };
+
+  const autoResumes = Boolean(current?.startAt) && startAt > 0;
 
   return (
     <div>
@@ -374,6 +641,7 @@ export default function Player({
             </button>
             <button
               onClick={() => {
+                resumeHere();
                 markLoaded(false);
                 setKey((k) => k + 1);
               }}
@@ -399,8 +667,10 @@ export default function Player({
               aria-checked={server === s.id}
               onClick={() => {
                 userPickedRef.current = true;
-                loadServer(s.id, true);
+                setMovedFrom(null);
                 persist(season, episode, s.id);
+                resumeHere();
+                loadServer(s.id, true);
               }}
               className={cn(
                 'shrink-0 snap-start rounded-full px-3 py-1.5 text-[13px] font-medium transition',
@@ -492,6 +762,45 @@ export default function Player({
         </div>
       )}
 
+      {/* Where the viewer left off */}
+      {note ? (
+        <div className="mt-2.5 flex items-start gap-2.5 rounded-2xl border border-accent/25 bg-accent/[0.07] px-3.5 py-2.5">
+          <History size={16} aria-hidden className="mt-0.5 shrink-0 text-accent" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="text-white/85">
+              {autoResumes ? 'Resuming at ' : 'You left at '}
+              <strong className="tabular-nums text-white">{formatTime(note.time)}</strong>
+              {note.duration ? (
+                <span className="tabular-nums text-white/40"> of {formatTime(note.duration)}</span>
+              ) : null}
+            </p>
+            {!autoResumes ? (
+              <p className="mt-0.5 text-xs leading-relaxed text-white/45">
+                {current?.name} can&apos;t jump there by itself — skip to{' '}
+                {formatTime(note.time)} in the player.
+              </p>
+            ) : null}
+          </div>
+          {autoResumes ? (
+            <button
+              type="button"
+              onClick={startOver}
+              className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-accent/50 hover:text-white"
+            >
+              Start over
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setNote(null)}
+            aria-label="Dismiss"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-white/40 transition hover:text-white"
+          >
+            <X size={13} aria-hidden />
+          </button>
+        </div>
+      ) : null}
+
       {/* Player frame */}
       <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card ring-1 ring-white/5">
         {!loaded && !exhausted && (
@@ -504,7 +813,8 @@ export default function Player({
         )}
         {prefReady ? (
           <iframe
-            key={`${server}-${season}-${episode}-${key}-${sandboxed ? 'sb' : 'open'}`}
+            ref={frameRef}
+            key={`${server}-${frameEp[0]}-${frameEp[1]}-${key}-${sandboxed ? 'sb' : 'open'}`}
             src={url}
             onError={autoAdvance}
             onLoad={() => {
@@ -570,6 +880,25 @@ export default function Player({
         </div>
       ) : (
         <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
+          {movedFrom && movedFrom !== server ? (
+            <p className="w-full text-xs leading-relaxed text-amber-200/90">
+              {nameOf(movedFrom)} (where you were watching) didn&apos;t load, so the player
+              switched to {current?.name}.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  userPickedRef.current = true;
+                  const back = movedFrom;
+                  setMovedFrom(null);
+                  resumeHere();
+                  loadServer(back, true);
+                }}
+                className="font-bold underline hover:text-amber-100"
+              >
+                Try {nameOf(movedFrom)} again
+              </button>
+            </p>
+          ) : null}
           <p className="min-w-0 flex-1 text-xs leading-relaxed text-white/30">
             Auto-switches when a server fails to load. If the player loads but shows its
             own error, use “Try next server”.
@@ -578,6 +907,8 @@ export default function Player({
             <button
               onClick={() => {
                 userPickedRef.current = true;
+                setMovedFrom(null);
+                resumeHere();
                 persist(season, episode, autoAdvance() ?? server);
               }}
               className="shrink-0 rounded-full bg-accent/15 px-4 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25"

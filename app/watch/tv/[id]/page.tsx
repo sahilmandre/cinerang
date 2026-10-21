@@ -134,6 +134,10 @@ export default async function WatchTV({
             seasons={playerSeasons}
             adult={adult}
             defaultServer={adult ? ADULT_DEFAULT_SERVER : undefined}
+            // Opened from a card (no ?s=&e=): continue the saved episode.
+            resumeSaved={searchParams.s == null && searchParams.e == null}
+            // Episode-list links name the episode; season tabs don't.
+            episodeChosen={searchParams.e != null}
           />
           <DownloadBox
             title={d.name}
@@ -151,7 +155,8 @@ export default async function WatchTV({
               {seasons.map((s) => (
                 <Link
                   key={s.season_number}
-                  href={`/watch/tv/${params.id}?s=${s.season_number}&e=1`}
+                  // No `e`: browsing a season isn't choosing an episode to watch.
+                  href={`/watch/tv/${params.id}?s=${s.season_number}`}
                   aria-current={s.season_number === season ? 'page' : undefined}
                   title={s.name}
                   className={cn(
