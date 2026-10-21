@@ -1,8 +1,9 @@
 // Server only — imported by route handlers, never by components.
 import { betterAuth } from 'better-auth/minimal'; // adapter-only entry: excludes Kysely
 import { mongodbAdapter } from '@better-auth/mongo-adapter';
+import { admin } from 'better-auth/plugins/admin';
 import { getMongo } from './db';
-import { isAllowedEmail } from './allowlist';
+import { isAllowedEmail, isOwnerEmail } from './allowlist';
 
 /** Error code the client turns into "this account isn't invited". */
 export const NOT_INVITED = 'not_invited';
@@ -37,6 +38,28 @@ function createAuth() {
         isAllowedEmail(user.email)
           ? undefined
           : { error: NOT_INVITED, errorDescription: 'This Google account is not invited.' },
+    },
+    // Adds role / banned to users; a banned account can't sign in
+    // (BANNED_USER) and banning ends its sessions. The panel's actions run
+    // server-side behind lib/admin.ts.
+    plugins: [admin({ bannedUserMessage: 'This account has been blocked.' })],
+    databaseHooks: {
+      session: {
+        create: {
+          // Owners (ADMIN_EMAILS) get the admin role when they sign in.
+          // Only promotes — admins made from the panel are left alone.
+          after: async (session, ctx) => {
+            const adapter = ctx?.context.internalAdapter;
+            if (!adapter) return;
+            const user = (await adapter.findUserById(session.userId)) as
+              | { email: string; role?: string | null }
+              | null;
+            if (user && isOwnerEmail(user.email) && user.role !== 'admin') {
+              await adapter.updateUser(session.userId, { role: 'admin' });
+            }
+          },
+        },
+      },
     },
   });
 }

@@ -121,6 +121,7 @@ export default function ContinueWatching() {
                 <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-white/35">
                   {c.mediaType === 'tv' ? 'Series' : 'Movie'}
                   {pos ? <span className="normal-case tracking-normal"> · left at {formatTime(pos.time)}</span> : null}
+                  {c.upNext ? <span className="normal-case tracking-normal text-accent/80"> · up next</span> : null}
                 </p>
               </div>
             </Link>

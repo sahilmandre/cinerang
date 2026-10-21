@@ -265,12 +265,13 @@ export function applyOps(data: SyncData, ops: Op[]): SyncData {
 /**
  * Server-side batch apply. Ops whose id was already applied are skipped, so
  * a retried request (lost response, flaky network) changes nothing twice.
- * Returns null when every op in the batch was a repeat.
+ * Returns null when every op in the batch was a repeat; `fresh` lists the
+ * ops actually applied (they also feed the watch history).
  */
 export function applyBatch(
   state: { data: SyncData; appliedOps: string[] },
   ops: Op[]
-): { data: SyncData; appliedOps: string[] } | null {
+): { data: SyncData; appliedOps: string[]; fresh: Op[] } | null {
   const seen = new Set(state.appliedOps);
   const fresh: Op[] = [];
   for (const op of ops) {
@@ -282,5 +283,6 @@ export function applyBatch(
   return {
     data: applyOps(state.data, fresh),
     appliedOps: [...state.appliedOps, ...fresh.map((op) => op.id)].slice(-CAPS.appliedOps),
+    fresh,
   };
 }

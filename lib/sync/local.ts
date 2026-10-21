@@ -224,7 +224,8 @@ export function commit(body: OpBody): SyncData {
   const sync = readSyncState();
   if (sync.ownerId) {
     // Playback saves a resume point every minute; a newer one for the same
-    // title makes any still-queued older one redundant.
+    // episode makes any still-queued older one redundant. Other episodes'
+    // points are kept — each one is a line in the watch history.
     const outbox =
       op.t === 'continue.upsert'
         ? sync.outbox.filter(
@@ -232,7 +233,9 @@ export function commit(body: OpBody): SyncData {
               !(
                 queued.t === 'continue.upsert' &&
                 queued.item.id === op.item.id &&
-                queued.item.mediaType === op.item.mediaType
+                queued.item.mediaType === op.item.mediaType &&
+                queued.item.season === op.item.season &&
+                queued.item.episode === op.item.episode
               )
           )
         : sync.outbox;

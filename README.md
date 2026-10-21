@@ -33,6 +33,20 @@ before, saved in the browser only. Design: `docs/auth-and-sync-plan.md`.
    production `BETTER_AUTH_URL`) and keep `vercel.json`'s region next to the
    Atlas cluster.
 
+## Admin panel & watch history
+- `/admin` (hidden from everyone else): accounts, overview, per-account
+  watch history, taste and devices; block / unblock, make or remove admin,
+  sign out everywhere, delete (removes all of an account's data).
+- Owners come from `ADMIN_EMAILS` (comma-separated); more admins can be made
+  in the panel. Owners can't be blocked, demoted or deleted from the panel.
+- Every signed-in account's viewing is recorded server-side (`watch_history`:
+  one row per title × episode with furthest point, length and finished; and
+  `activity`: dated likes, dislikes and watchlist changes) — see
+  `lib/history.ts`. Export it as JSON Lines from the overview page for a
+  recommender or local LLM; accounts appear by id only.
+- After pulling this change, run `npm run db:setup` again: it adds the new
+  indexes and seeds the history from existing Continue Watching lists.
+
 ## Routes
 - `/` trending / popular / top-rated / anime
 - `/search?q=...`

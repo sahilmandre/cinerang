@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { isAllowedEmail } from '@/lib/allowlist';
 import { profiles, type ProfileDoc } from '@/lib/db';
+import { recordHistory } from '@/lib/history';
+import { sameOrigin } from '@/lib/http';
 import { applyBatch, emptyData, normalizeData } from '@/lib/sync/reducer';
 import { parseBatch } from '@/lib/sync/schema';
 import type { SyncData } from '@/lib/sync/types';
@@ -23,18 +25,12 @@ const etag = (rev: number) => `"${rev}"`;
 async function currentUser(req: NextRequest): Promise<{ id: string } | Response> {
   const session = await getAuth().api.getSession({ headers: req.headers });
   if (!session) return json({ error: 'unauthorized' }, 401);
-  // Removed from the invite list after signing in: the client signs out.
+  // Removed from the invite list or blocked from the admin panel after
+  // signing in: the client signs out. (Blocking also ends the account's
+  // sessions; a cached session cookie lasts at most 5 more minutes.)
   if (!isAllowedEmail(session.user.email)) return json({ error: 'not_invited' }, 403);
+  if (session.user.banned) return json({ error: 'banned' }, 403);
   return { id: session.user.id };
-}
-
-/** The session cookie is SameSite=Lax; this also rejects cross-site POSTs. */
-function sameOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get('origin');
-  if (!origin) return false;
-  const allowed = new Set([req.nextUrl.origin]);
-  if (process.env.BETTER_AUTH_URL) allowed.add(new URL(process.env.BETTER_AUTH_URL).origin);
-  return allowed.has(origin);
 }
 
 function dataOf(doc: ProfileDoc): SyncData {
@@ -116,14 +112,17 @@ export async function POST(req: NextRequest) {
     if (!doc) {
       try {
         await collection.insertOne({ _id: user.id, ...next });
-        return json({ rev: next.rev, rejected: batch.rejected });
       } catch (error) {
         if (isDuplicateKey(error)) continue; // first write raced another device
         throw error;
       }
+    } else {
+      const { matchedCount } = await collection.replaceOne({ _id: user.id, rev }, next);
+      if (matchedCount !== 1) continue;
     }
-    const { matchedCount } = await collection.replaceOne({ _id: user.id, rev }, next);
-    if (matchedCount === 1) return json({ rev: next.rev, rejected: batch.rejected });
+    // Only ops applied for the first time reach the watch history.
+    await recordHistory(user.id, result.fresh);
+    return json({ rev: next.rev, rejected: batch.rejected });
   }
   return json({ error: 'conflict' }, 409);
 }

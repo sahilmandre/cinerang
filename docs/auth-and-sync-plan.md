@@ -287,6 +287,28 @@ runtime and local Node 24 both qualify.
   show "You left at 11:40 — skip to 11:40 in the player". Continue Watching cards show
   a progress bar and "left at 11:40".
 
+### Admin panel & watch history (added 2026-10-21)
+
+- **Capture without extra traffic.** `/api/sync` files the ops it applies for the first
+  time (`applyBatch().fresh`) into `watch_history` (upsert per account × title × episode:
+  `firstAt`, `lastAt`, `$max maxTime`, `duration`, `completed`, `saves`, `server`) and
+  `activity` (append-only likes / unlikes / dislikes / watchlist and Continue Watching
+  removals). Retried uploads are never counted twice. Entries queued after a finish
+  carry `upNext: true` and are not history; the finished episode's final position is
+  saved first so it is marked complete. Outbox compaction now collapses only repeats of
+  the same episode.
+- **Admin.** Better Auth admin plugin (role / banned fields; banned accounts can't sign
+  in — `BANNED_USER`). Owners = `ADMIN_EMAILS` (promoted on sign-in, protected in the
+  panel). Admin checks read the session with `disableCookieCache`, so revocation is
+  immediate; every admin page and route checks on its own (layouts don't re-run on
+  in-app navigation). Actions run server-side through `auth.$context.internalAdapter`;
+  delete also removes the profile, history and activity. `/api/sync` refuses banned
+  accounts (403 → the client signs out).
+- **Export.** `/api/admin/export?data=history|activity|taste[&user=]` streams JSON Lines;
+  accounts by id, never email.
+- **Privacy.** `/privacy` states that watch history is kept, who can see it and how to
+  delete it.
+
 ## 8. Performance budget
 
 | Metric | Target |

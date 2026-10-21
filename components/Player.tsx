@@ -432,7 +432,8 @@ export default function Player({
     s = season,
     e = episode,
     srv = server,
-    at: Position | null = s === season && e === episode ? currentPosition() : null
+    at: Position | null = s === season && e === episode ? currentPosition() : null,
+    upNext = false
   ) => {
     writingRef.current = true;
     try {
@@ -445,6 +446,7 @@ export default function Player({
         episode: e,
         server: srv,
         ...(at ?? {}),
+        ...(upNext ? { upNext: true } : {}),
         updatedAt: Date.now(),
       });
     } finally {
@@ -528,7 +530,10 @@ export default function Player({
       finishedRef.current = true;
       dwellFiredRef.current = true;
       setNote(null);
-      if (type === 'tv' && nextPosition) persist(nextPosition[0], nextPosition[1], server, null);
+      // The finished position first (the watch history marks it complete),
+      // then the next episode, queued but not started.
+      persist(season, episode, server, whole(p));
+      if (type === 'tv' && nextPosition) persist(nextPosition[0], nextPosition[1], server, null, true);
       else persist(season, episode, server, null);
       return;
     }

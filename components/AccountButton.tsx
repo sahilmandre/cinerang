@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, LogOut, MonitorSmartphone, X } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Loader2, LogOut, MonitorSmartphone, ShieldCheck, X } from 'lucide-react';
 import {
   prefetchAuthClient,
   signInWithGoogle,
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 const ERRORS: Record<string, string> = {
   not_invited: "This Google account isn't invited to CineRang. Ask the owner to add it.",
+  BANNED_USER: 'This account has been blocked. Contact the site owner if this is a mistake.',
 };
 
 export function GoogleMark({ size = 16 }: { size?: number }) {
@@ -177,6 +179,17 @@ export default function AccountButton() {
             Taste, watchlist and resume points sync to this account
           </p>
           <div className="mt-2 grid gap-1">
+            {user.role === 'admin' ? (
+              <Link
+                href="/admin"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium text-accent transition hover:bg-white/[0.06]"
+              >
+                <ShieldCheck size={15} aria-hidden />
+                Admin panel
+              </Link>
+            ) : null}
             <button
               type="button"
               role="menuitem"

@@ -14,6 +14,8 @@ export interface SessionUser {
   name: string;
   email: string;
   image?: string | null;
+  /** "admin" for admin-panel users (Better Auth admin plugin). */
+  role?: string | null;
 }
 
 export interface SessionState {

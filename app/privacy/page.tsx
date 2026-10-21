@@ -21,7 +21,7 @@ export default function PrivacyPage() {
   return (
     <article className="mx-auto mt-8 max-w-3xl">
       <PageHeader title="Privacy Policy" />
-      <p className="mt-3 px-1 text-xs text-white/40">Last updated: 21 October 2026</p>
+      <p className="mt-3 px-1 text-xs text-white/40">Last updated: 21 October 2026 (watch history)</p>
 
       <div className="px-1">
         <Section title="What CineRang is">
@@ -49,11 +49,27 @@ export default function PrivacyPage() {
               video server you used, so you can resume there.
             </li>
             <li>Your player setting for the popup blocker.</li>
+            <li>
+              Your watch history: each movie and episode you watch while signed in, when, on which
+              server, how far you got and whether you finished it.
+            </li>
+            <li>
+              A dated log of your likes, dislikes and watchlist changes.
+            </li>
           </ul>
           <p>
-            This is stored in a MongoDB Atlas database (Mumbai region) and used only to sync your
-            devices and personalise recommendations. If you don&apos;t sign in, all of this stays in
-            your browser only.
+            This is stored in a MongoDB Atlas database (Mumbai region) and used to sync your devices
+            and to personalise and improve recommendations — including recommendation models built
+            from viewing patterns. If you don&apos;t sign in, everything stays in your browser only
+            and no history is kept.
+          </p>
+        </Section>
+
+        <Section title="Who can see it">
+          <p>
+            The site&apos;s administrators can see accounts, watch history and taste data to run the
+            service (for example to block abuse) and to improve recommendations. Data prepared for
+            recommendation models identifies accounts by an internal id, not by name or email.
           </p>
         </Section>
 
@@ -79,7 +95,7 @@ export default function PrivacyPage() {
         <Section title="Deleting your data">
           <p>
             Signing out removes your data from that device. To delete your account and everything
-            stored for it, email{' '}
+            stored for it — including your watch history — email{' '}
             <a href={`mailto:${CONTACT_EMAIL}`} className="font-semibold text-accent hover:underline">
               {CONTACT_EMAIL}
             </a>{' '}

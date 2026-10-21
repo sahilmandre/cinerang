@@ -32,6 +32,7 @@ const item = z.object({
     .optional(),
   time: z.number().int().min(0).max(86_400).optional(),
   duration: z.number().int().positive().max(86_400).optional(),
+  upNext: z.boolean().optional(),
   updatedAt: z.number().int().nonnegative(),
 });
 

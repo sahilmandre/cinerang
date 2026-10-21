@@ -42,6 +42,8 @@ export interface ContinueItem {
   time?: number;
   /** Length in seconds, as reported by the player. */
   duration?: number;
+  /** Queued after the previous episode finished — not started yet. */
+  upNext?: boolean;
   updatedAt: number;
 }
 
